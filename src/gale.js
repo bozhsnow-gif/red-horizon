@@ -4,7 +4,7 @@
 const TERRAIN_SCALE = 1;
 const Gale = {
   terrainScale: TERRAIN_SCALE,
-  spawnCoordinates: { latitude: -4.6, longitude: 137.4 },
+  spawnCoordinates: { latitude: -4.589466996, longitude: 137.441633 },
   get spawnPoint() {
     return this.fromCoordinates(this.spawnCoordinates.latitude, this.spawnCoordinates.longitude);
   },

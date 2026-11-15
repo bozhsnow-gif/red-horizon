@@ -125,7 +125,9 @@ test('Reset restores spawn, camera, route, samples and displayed driving mode', 
   assert.equal(game.evaluate('climbIndex'), 0);
   assert.equal(game.evaluate('collected'), 0);
   assert.equal(game.evaluate('rover.v'), 0);
-  assert.equal(game.evaluate('Gale.coordinates(rover.x,rover.y).longitude'), 137.4);
+  assert(
+    Math.abs(game.evaluate('Gale.coordinates(rover.x,rover.y).longitude') - 137.441633) < 1e-9,
+  );
   assert.equal(
     game.element('#drive-mode').textContent,
     'SIMULATION',

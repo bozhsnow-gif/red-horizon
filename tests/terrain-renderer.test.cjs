@@ -37,8 +37,8 @@ test('Terrain, coordinates, wheel contact and GPU motion agree', async (t) => {
   });
   await t.test('Spawn, directions and inverse geographic conversion remain consistent', () => {
     const point = run('Gale.coordinates(rover.x,rover.y)');
-    assert.equal(point.latitude, -4.6);
-    assert.equal(point.longitude, 137.4);
+    assert(Math.abs(point.latitude - -4.589466996) < 1e-9);
+    assert(Math.abs(point.longitude - 137.441633) < 1e-9);
     for (const [lat, lon] of [
       [-4.6, 137.4],
       [-5.44, 137.7],
@@ -50,8 +50,8 @@ test('Terrain, coordinates, wheel contact and GPU motion agree', async (t) => {
       assert(Math.abs(result.latitude - lat) < 1e-9);
       assert(Math.abs(result.longitude - lon) < 1e-9);
     }
-    assert(run('Gale.coordinates(rover.x+100,rover.y).longitude>137.4'));
-    assert(run('Gale.coordinates(rover.x,rover.y+100).latitude< -4.6'));
+    assert(run('Gale.coordinates(rover.x+100,rover.y).longitude>Gale.spawnCoordinates.longitude'));
+    assert(run('Gale.coordinates(rover.x,rover.y+100).latitude<Gale.spawnCoordinates.latitude'));
     const max = run('Gale.drivingBounds.maxX');
     run('Gale.terrainScale=.7');
     assert(Math.abs(run('Gale.drivingBounds.maxX') - ((max + 30) * 0.7 - 30)) < 1e-7);
@@ -60,7 +60,12 @@ test('Terrain, coordinates, wheel contact and GPU motion agree', async (t) => {
   await t.test('Travel destinations keep each wheel touching the displayed terrain', () => {
     for (const name of ['landing', 'summit', 'rim']) {
       run(`travelTo('${name}');render()`);
-      assert.equal(run('rover.x'), run(`Gale.mapPoint(...Gale.locations.${name}).x`));
+      assert.equal(
+        run('rover.x'),
+        run(
+          name === 'landing' ? 'Gale.spawnPoint.x' : `Gale.mapPoint(...Gale.locations.${name}).x`,
+        ),
+      );
       assert(
         run(
           'graphics.wheels.every(w=>Math.abs(graphics.surface(w.model[12],w.model[13])+w.radius*Math.sqrt(Math.max(0,1-w.model[2]**2))-w.model[14])<.2)',

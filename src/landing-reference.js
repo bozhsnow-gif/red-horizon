@@ -2,8 +2,8 @@
 // Visual reference, not a DEM or georeferenced rock survey.
 const LandingReference = {
   image: 'landing-reference.jpg',
-  latitude: -4.6,
-  longitude: 137.4,
+  latitude: -4.589466996,
+  longitude: 137.441633,
   cameraHeightMeters: 2,
   source: 'https://science.nasa.gov/photojournal/gale-crater-vista-in-glorious-color/',
   rocks(center) {

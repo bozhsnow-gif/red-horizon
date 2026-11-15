@@ -2,7 +2,7 @@
 
 A browser game for exploring Gale Crater with the fictional ARES rover. It includes a custom WebGL 2 renderer, orbit and first-person cameras, a crater overview, free flight, terrain-following wheels, tire tracks, a landing intro, and Curiosity route references.
 
-The rover starts at **4.6° S, 137.4° E**. The default landscape is estimated from a supplied color topographic map. The game can import a measured NASA MOLA elevation crop; importing is optional and does not turn the illustrative small rocks or vehicle physics into measured science data.
+The rover starts at **4.589466996° S, 137.441633° E**, the first coordinate of NASA’s published path near Bradbury Landing. The default landscape is estimated from a supplied color topographic map. The game can import a measured NASA MOLA elevation crop; importing is optional and does not turn the illustrative small rocks or vehicle physics into measured science data.
 
 ## Run locally
 
@@ -38,9 +38,9 @@ Serve `dist/` with any static web server. You can also open `src/index.html` dir
 | Recenter camera              | Double-click the view                                                   |
 | Skip intro                   | Skip Intro button or Escape                                             |
 
-The rover stays parked during free flight. Exploration mode is accelerated for play; Simulation mode caps speed at 0.04 m/s. The three travel buttons jump between the landing area, mountain, and southern rim. The mini-map cycles between nearby, route, and whole-crater views.
+The rover stays parked during free flight. Exploration mode is accelerated for play; Simulation mode caps speed at 0.04 m/s. The three travel buttons jump between the landing area, mountain, and southern rim. The mini-map cycles between nearby, route, and whole-crater views. It loads NASA’s Gale Crater and high-resolution route imagery when available, applies an illustrative tint for consistent color, and falls back to terrain colors outside coverage or offline.
 
-Named stops follow the supplied Curiosity route screenshots. Small intermediate checkpoints preserve the visible bends. Arrive within 12 m of the next driving checkpoint to advance; flying over it does not count.
+The route follows a simplified snapshot of NASA’s Curiosity rover path. Named stops are approximate matches to the supplied screenshots. Small intermediate checkpoints preserve its bends. Arrive within 12 m of the next driving checkpoint to advance; flying over it does not count.
 
 ## Project layout
 
@@ -50,7 +50,7 @@ Named stops follow the supplied Curiosity route screenshots. Small intermediate 
 | `src/renderer.js`                                               | WebGL terrain, rover, wheel motion, shadows, tracks, and cameras      |
 | `src/gale.js`                                                   | Coordinates, terrain sampling, and simplified driving physics         |
 | `src/mola-import.js`, `src/terrain-loader.js`, `src/nasa-ui.js` | NASA file validation, import, local storage, and provenance UI        |
-| `src/traverse-data.js`, `src/waypoints.js`                      | Screenshot-derived route registration, named stops, and map display   |
+| `src/traverse-data.js`, `src/waypoints.js`                      | NASA route snapshot, estimated named stops, and map display           |
 | `src/intro.js`, `src/intro.css`                                 | Landing video playback and generated background                       |
 | `src/ares4-mesh.js`                                             | Exported body and four wheel groups from Blender                      |
 | `assets/source/`                                                | Original Blender rover, intro movie, and topographic conversion input |
@@ -81,6 +81,6 @@ The optional import accepts the NASA MOLA 128-pixels-per-degree topography produ
 
 Measured MOLA cells are roughly 460 m apart. They do not resolve individual stones, dunes, tire hazards, or a safe driving route. The local map has projection distortion and omits planetary curvature. The image-derived fallback has additional unknown projection and elevation-datum limitations.
 
-The route uses estimated positions manually traced from screenshots, with Bradbury Landing as its geographic anchor. It is not the full mission traverse or a live rover position. The Gediz Vallis screenshot is preserved as an unconnected reference because its missing connecting segment and absolute registration were not established.
+The route is a snapshot of [NASA’s published rover path](https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_traverse.json), simplified to approximately 15 m and connected across short source gaps. Named stops are approximate screenshot-derived estimates matched to that path. The snapshot is not a live rover position.
 
 See [ASSETS.md](ASSETS.md) for media sources and [docs/review.md](docs/review.md) for review findings and verification limits.

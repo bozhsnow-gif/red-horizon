@@ -1,55 +1,89 @@
 'use strict';
-// Screenshot-derived traverse; the spawn approach is explicitly non-historical.
+// NASA rover path, beginning at its first published coordinate.
 const WaypointRoute = {
   mode: 'nearby',
   selected: -1,
+  customView: null,
   cache: null,
   cacheKey: '',
   mapMarkers: [],
-  drawReference(ctx, g, px, py) {
+  tileCache: new Map(),
+  drawReference(ctx, g, px, py, view) {
     if (typeof Image === 'undefined') return;
-    if (!this.referenceImages)
-      this.referenceImages = CURIOSITY_TRAVERSE.sections
-        .filter((s) => s.registered)
-        .map((s) => {
-          const img = new Image();
-          img.src = s.image;
-          return { section: s, img };
-        });
-    for (const { section: s, img } of this.referenceImages) {
-      if (!img.complete || !img.naturalWidth) continue;
-      // Exclude screenshot controls/readouts at the bottom and right edge.
-      const w = s.id === 'landing' ? 1611 : 1585,
-        h = 1040;
-      const tl = CURIOSITY_TRAVERSE.coordinates(...s.offset),
-        br = CURIOSITY_TRAVERSE.coordinates(s.offset[0] + w, s.offset[1] + h);
-      const a = g.fromCoordinates(tl.latitude, tl.longitude),
-        b = g.fromCoordinates(br.latitude, br.longitude);
-      ctx.drawImage(img, 0, 0, w, h, px(a.x), py(a.y), px(b.x) - px(a.x), py(b.y) - py(a.y));
+    const topLeft = g.coordinates(view.x, view.y);
+    const bottomRight = g.coordinates(view.x + view.w, view.y + view.h);
+    const layers = [
+      {
+        name: 'MSL_CTX_ortho_mosaic_6m',
+        min: 6,
+        max: 13,
+        bounds: [135.978762, -7.844091, 139.485904, -3.397065],
+      },
+      {
+        name: 'MSL_Gale_HiRISE-LRGB_78quads',
+        min: 10,
+        max: 18,
+        bounds: [137.326724, -4.875605, 137.478558, -4.555063],
+      },
+    ];
+    const toX = (longitude, n) => ((longitude + 180) / 360) * n;
+    const toY = (latitude, n) => {
+      const rad = (Math.max(-85, Math.min(85, latitude)) * Math.PI) / 180;
+      return ((1 - Math.asinh(Math.tan(rad)) / Math.PI) / 2) * n;
+    };
+    const toLatitude = (y, n) =>
+      (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
+    for (const layer of layers) {
+      const [west, south, east, north] = layer.bounds;
+      const left = Math.max(topLeft.longitude, west),
+        right = Math.min(bottomRight.longitude, east);
+      const top = Math.min(topLeft.latitude, north),
+        bottom = Math.max(bottomRight.latitude, south);
+      if (left >= right || bottom >= top) continue;
+      // Aim for about one source pixel per displayed map pixel; never exceed native resolution.
+      const z = Math.max(
+        layer.min,
+        Math.min(
+          layer.max,
+          Math.ceil(Math.log2((360 * 260) / (256 * (bottomRight.longitude - topLeft.longitude)))),
+        ),
+      );
+      const n = 2 ** z;
+      const x0 = Math.floor(toX(left, n)),
+        x1 = Math.floor(toX(right, n));
+      const y0 = Math.floor(toY(top, n)),
+        y1 = Math.floor(toY(bottom, n));
+      for (let x = x0; x <= x1; x++)
+        for (let y = y0; y <= y1; y++) {
+          const key = layer.name + '/' + z + '/' + x + '/' + (n - 1 - y);
+          let img = this.tileCache.get(key);
+          if (!img) {
+            img = new Image();
+            img.onload = () => this.onTilesChanged?.();
+            img.src = 'https://mars.nasa.gov/mmgis-maps/MSL/Layers/' + key + '.png';
+            this.tileCache.set(key, img);
+          }
+          if (!img.complete || !img.naturalWidth) continue;
+          const nw = g.fromCoordinates(toLatitude(y, n), (x / n) * 360 - 180);
+          const se = g.fromCoordinates(toLatitude(y + 1, n), ((x + 1) / n) * 360 - 180);
+          ctx.drawImage(
+            img,
+            px(nw.x),
+            py(nw.y),
+            px(se.x) - px(nw.x) + 0.5,
+            py(se.y) - py(nw.y) + 0.5,
+          );
+        }
     }
   },
   points(g) {
-    const a = g.spawnPoint,
-      trace = CURIOSITY_TRAVERSE.registeredPoints(),
-      b = g.fromCoordinates(trace[0].latitude, trace[0].longitude);
-    const key = [a.x, a.y, b.x, b.y, ...g.geoScale, CURIOSITY_TRAVERSE.version].join(',');
+    const trace = CURIOSITY_TRAVERSE.registeredPoints();
+    const key = [...g.geoScale, g.geo.latitude, g.geo.longitude, CURIOSITY_TRAVERSE.version].join(
+      ',',
+    );
     if (this.cacheKey === key) return this.cache;
-    const metres = Math.hypot(b.x - a.x, b.y - a.y) / g.unitsPerMeter,
-      points = [];
-    for (let d = 150; d < metres - 12; d += 200) {
-      const t = d / metres,
-        x = a.x + (b.x - a.x) * t,
-        y = a.y + (b.y - a.y) * t;
-      points.push({
-        x,
-        y,
-        ...g.coordinates(x, y),
-        name: 'Approach to Bradbury',
-        kind: 'approach',
-        distanceFromStart: d,
-      });
-    }
-    let distance = metres,
+    const points = [];
+    let distance = 0,
       previous = null;
     for (const p of trace) {
       const position = g.fromCoordinates(p.latitude, p.longitude);
@@ -78,7 +112,7 @@ const WaypointRoute = {
       if (p.landmark) destination = p.name;
       p.destination = destination;
     }
-    this.traceLengthMeters = distance - metres;
+    this.traceLengthMeters = distance;
     return this.cache;
   },
   segmentDistance(p, a, b) {
@@ -102,6 +136,7 @@ const WaypointRoute = {
     return points.slice(index).find((p) => p.landmark) || null;
   },
   view(g, rover, index) {
+    if (this.customView) return this.customView;
     if (this.mode === 'crater') return { x: 0, y: 0, w: g.widthUnits, h: g.heightUnits };
     const points = g.climbRoute;
     if (this.mode === 'route') {
@@ -128,6 +163,22 @@ const WaypointRoute = {
     const h = Math.min(4000 * g.unitsPerMeter, Math.max(800 * g.unitsPerMeter, dist * 2.2)),
       w = (h * 260) / 235;
     return { x: cx - w / 2, y: cy - h / 2, w, h };
+  },
+  zoom(g, rover, index, factor, x = 130, y = 117.5) {
+    const v = this.view(g, rover, index);
+    const width = Math.max(100 * g.unitsPerMeter, Math.min(g.widthUnits * 2, v.w * factor));
+    const ratio = width / v.w;
+    const height = v.h * ratio;
+    this.customView = {
+      x: v.x + (v.w - width) * (x / 260),
+      y: v.y + (v.h - height) * (y / 235),
+      w: width,
+      h: height,
+    };
+  },
+  pan(g, rover, index, dx, dy) {
+    const v = this.view(g, rover, index);
+    this.customView = { ...v, x: v.x - (dx / 260) * v.w, y: v.y - (dy / 235) * v.h };
   },
   update(g, r, index) {
     const points = g.climbRoute,
@@ -175,26 +226,20 @@ const WaypointRoute = {
     document.querySelector('#route-map-mode').textContent = 'MAP: ' + this.mode.toUpperCase();
     const selected = points[this.selected] || nextSite || p;
     document.querySelector('#waypoint-details').textContent = selected
-      ? (selected.landmark
-          ? selected.name
-          : selected.kind === 'approach'
-            ? 'Game approach to Bradbury Landing'
-            : 'Route checkpoint toward ' + selected.destination) +
+      ? (selected.landmark ? selected.name : 'Route checkpoint toward ' + selected.destination) +
         ' · ' +
         Math.abs(selected.latitude).toFixed(selected.site?.id === 'bradbury-landing' ? 4 : 3) +
         '° S, ' +
         selected.longitude.toFixed(selected.site?.id === 'bradbury-landing' ? 4 : 3) +
         '° E' +
-        (selected.kind === 'approach'
-          ? ' · game approach, not Curiosity’s route'
-          : selected.site
-            ? ' · ' +
-              selected.site.type +
-              ' · ' +
-              selected.site.positionAccuracy +
-              (selected.site.visitSol ? ' · published visit: Sol ' + selected.site.visitSol : '')
-            : ' · screenshot estimate')
-      : 'Visible trace complete; later sections are not connected';
+        (selected.site
+          ? ' · ' +
+            selected.site.type +
+            ' · ' +
+            selected.site.positionAccuracy +
+            (selected.site.visitSol ? ' · published visit: Sol ' + selected.site.visitSol : '')
+          : ' · NASA rover path (simplified)')
+      : 'Mapped route complete';
     const source = document.querySelector('#waypoint-source');
     if (source) {
       source.hidden = !selected?.site;
@@ -302,7 +347,13 @@ const WaypointRoute = {
     ctx.beginPath();
     ctx.rect(0, 0, 260, 235);
     ctx.clip();
-    this.drawReference(ctx, g, px, py);
+    this.drawReference(ctx, g, px, py, v);
+    // NASA's base mosaic is grayscale; apply the same illustrative tint to all imagery.
+    ctx.save();
+    ctx.globalCompositeOperation = 'color';
+    ctx.fillStyle = '#b86c48';
+    ctx.fillRect(0, 0, 260, 235);
+    ctx.restore();
     ctx.strokeStyle = '#eee8d055';
     ctx.lineWidth = 0.7;
     for (const line of g.coordinateGrid()) {
@@ -321,9 +372,7 @@ const WaypointRoute = {
     const points = g.climbRoute,
       all = [g.spawnPoint, ...points];
     for (let i = 1; i < all.length; i++) {
-      const approach = all[i].kind === 'approach' || all[i].name === 'Bradbury Landing';
-      ctx.setLineDash(approach ? [4, 4] : []);
-      ctx.strokeStyle = i <= index ? '#75bc8c' : approach ? '#77c5df' : '#eee8d0';
+      ctx.strokeStyle = i <= index ? '#75bc8c' : '#eee8d0';
       ctx.lineWidth = i === index + 1 ? 3 : 1.5;
       ctx.beginPath();
       ctx.moveTo(px(all[i - 1].x), py(all[i - 1].y));

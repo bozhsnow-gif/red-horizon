@@ -8,8 +8,8 @@ test('Registered route preserves scale, travel order, provenance, labels and sel
     vm = require('node:vm');
   const data = require('../src/traverse-data.js'),
     trace = data.registeredPoints();
-  assert.equal(trace[0].latitude, -4.5895);
-  assert.equal(trace[0].longitude, 137.4417);
+  assert.equal(trace[0].latitude, -4.589466996);
+  assert.equal(trace[0].longitude, 137.441633);
   const east = data.coordinates(1118 + 394, 333),
     north = data.coordinates(1118, 333 - 394),
     rad = Math.PI / 180;
@@ -37,28 +37,16 @@ test('Registered route preserves scale, travel order, provenance, labels and sel
     'Naukluft Plateau',
     'Murray Buttes',
     'Ogunquit Beach',
-    'End of unambiguous trace',
   ]);
-  assert(trace[6].longitude > trace[0].longitude, 'Yellowknife excursion must go east');
+  assert(
+    trace.some((p) => p.longitude > trace[0].longitude),
+    'Yellowknife excursion must go east',
+  );
   assert(trace.at(-1).latitude < trace[0].latitude, 'The main traverse proceeds south');
-  const seam = trace.findIndex((p) => p.section === 'kimberley-south');
-  assert(seam > 0);
-  assert(
-    Math.hypot(
-      trace[seam].pixel[0] - trace[seam - 1].pixel[0],
-      trace[seam].pixel[1] - trace[seam - 1].pixel[1],
-    ) < 20,
-    'Overlapping screenshots must join without a jump',
-  );
-  assert.equal(
-    trace.filter((p) => p.pixel[0] === 576 && p.pixel[1] === 937).length,
-    1,
-    'Overlap must not duplicate route',
-  );
-  assert(
-    !trace.some((p) => p.section === 'gediz-vallis'),
-    'Unregistered Gediz points must not acquire fabricated world coordinates',
-  );
+  assert(trace.length > 300, 'The simplified route retains its bends');
+  assert.equal(trace.at(-1).latitude, -4.826023311);
+  assert.equal(trace.at(-1).longitude, 137.388886);
+  assert(trace.every((p) => p.section === 'nasa-rover-path'));
   for (const s of data.sections) assert(fs.statSync(path.join(sourceRoot, s.image)).size > 100000);
   const sandbox = { console };
   vm.createContext(sandbox);
@@ -70,9 +58,12 @@ test('Registered route preserves scale, travel order, provenance, labels and sel
   );
   const evaluate = (code) => vm.runInContext(code, sandbox);
   const points = JSON.parse(evaluate('JSON.stringify(Gale.climbRoute)'));
-  assert(points[0].kind === 'approach');
+  assert.equal(points[0].kind, 'trace');
+  assert.equal(points[0].x, evaluate('Gale.spawnPoint.x'));
+  assert.equal(points[0].y, evaluate('Gale.spawnPoint.y'));
+  assert(points.every((p) => p.kind === 'trace'));
   assert(points.some((p) => p.name === 'Bradbury Landing'));
-  assert(points.at(-1).name === 'End of unambiguous trace');
+  assert(points.at(-1).latitude === -4.826023311);
   assert(
     points.every(
       (p, i) =>
@@ -102,6 +93,20 @@ test('Registered route preserves scale, travel order, provenance, labels and sel
         Math.abs(coords.longitude - p.longitude) < 1e-9,
     );
   }
+  // Zoom stays anchored under the cursor; drag shifts the view in map units.
+  const autoView = JSON.parse(
+    evaluate('JSON.stringify(WaypointRoute.view(Gale,Gale.spawnPoint,0))'),
+  );
+  evaluate('WaypointRoute.zoom(Gale,Gale.spawnPoint,0,0.5,65,80)');
+  const zoomed = JSON.parse(evaluate('JSON.stringify(WaypointRoute.customView)'));
+  assert(Math.abs(zoomed.w - autoView.w * 0.5) < 1e-6);
+  assert(Math.abs(zoomed.x + zoomed.w * 0.25 - (autoView.x + autoView.w * 0.25)) < 1e-6);
+  assert(
+    Math.abs(zoomed.y + (zoomed.h * 80) / 235 - (autoView.y + (autoView.h * 80) / 235)) < 1e-6,
+  );
+  evaluate('WaypointRoute.pan(Gale,Gale.spawnPoint,0,26,0)');
+  assert(Math.abs(evaluate('WaypointRoute.customView.x') - (zoomed.x - zoomed.w * 0.1)) < 1e-6);
+  evaluate('WaypointRoute.customView=null');
   evaluate('WaypointRoute.mode="route"');
   const view = JSON.parse(evaluate('JSON.stringify(WaypointRoute.view(Gale,Gale.spawnPoint,0))'));
   assert(
@@ -118,11 +123,14 @@ test('Registered route preserves scale, travel order, provenance, labels and sel
     }
   };
   sandbox.ctx = { drawImage: (...args) => calls.push(args) };
-  evaluate('WaypointRoute.drawReference(ctx,Gale,x=>x,y=>y)');
-  assert.equal(calls.length, 2, 'Only registered screenshots belong on the game map');
-  assert(calls.every((c) => c.slice(1).every(Number.isFinite) && c[7] > 0 && c[8] > 0));
-  assert.equal(evaluate('Gale.spawnCoordinates.latitude'), -4.6);
-  assert.equal(evaluate('Gale.spawnCoordinates.longitude'), 137.4);
+  evaluate(
+    'WaypointRoute.mode="nearby";WaypointRoute.drawReference(ctx,Gale,x=>x,y=>y,WaypointRoute.view(Gale,Gale.spawnPoint,0))',
+  );
+  assert(calls.some((c) => c[0].src.includes('MSL_CTX_ortho_mosaic_6m')));
+  assert(calls.some((c) => c[0].src.includes('MSL_Gale_HiRISE-LRGB_78quads')));
+  assert(calls.every((c) => c.slice(1).every(Number.isFinite) && c[3] > 0 && c[4] > 0));
+  assert.equal(evaluate('Gale.spawnCoordinates.latitude'), -4.589466996);
+  assert.equal(evaluate('Gale.spawnCoordinates.longitude'), 137.441633);
   const sites = points.filter((p) => p.landmark);
   assert.equal(sites.length, 12, 'Only real named sites are landmarks, not the trace boundary');
   assert.deepEqual(
@@ -136,12 +144,7 @@ test('Registered route preserves scale, travel order, provenance, labels and sel
         p.site.source.startsWith('https://') && p.site.positionAccuracy && p.site.positionSource,
     ),
   );
-  assert.deepEqual(
-    sites.find((p) => p.name === 'Cooperstown').pixel,
-    [800, 721],
-    'Cooperstown must be beside its label, not the unrelated surface-view icon farther southwest',
-  );
-  assert.deepEqual(sites.find((p) => p.name === 'Darwin').pixel, [929, 549]);
+  assert(sites.every((p) => p.site.positionSource.includes('NASA rover path')));
   const elements = new Map();
   sandbox.document = {
     querySelector: (id) => {

@@ -53,7 +53,7 @@ test('Begin Exploring plays once, pauses the mission, and returns control on com
   await game.element('#reset').click();
   assert.equal(game.playCalls, plays, 'Mission reset does not replay the intro');
   assert.equal(run('rover.v'), 0);
-  assert.equal(run('Gale.coordinates(rover.x,rover.y).latitude'), -4.6);
+  assert(Math.abs(run('Gale.coordinates(rover.x,rover.y).latitude') - -4.589466996) < 1e-9);
 });
 
 test('Skip and late media errors cannot leave the game blocked', async () => {

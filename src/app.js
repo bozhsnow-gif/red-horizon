@@ -96,6 +96,7 @@ function init() {
   climbIndex = 0;
   WaypointRoute.selected = -1;
   WaypointRoute.mode = 'nearby';
+  WaypointRoute.customView = null;
   clearInput();
   resetCamera();
   uiTimer = 0;
@@ -149,12 +150,13 @@ function showLandingReference() {
   document.querySelector('#landing-photo').open = true;
   updateUI();
   render();
-  message('LANDING VIEW · 4.6° S, 137.4° E · 2 m CAMERA');
+  message('LANDING VIEW · 4.5895° S, 137.4416° E · 2 m CAMERA');
 }
 document.querySelector('#landing-view').onclick = () => startMission(showLandingReference);
 document.querySelector('#route-map-mode').onclick = () => {
   let modes = ['nearby', 'route', 'crater'];
   WaypointRoute.mode = modes[(modes.indexOf(WaypointRoute.mode) + 1) % modes.length];
+  WaypointRoute.customView = null;
   updateUI();
   drawMap();
 };
@@ -163,20 +165,70 @@ document.querySelector('#waypoint-list').onclick = (e) => {
   if (!b) return;
   WaypointRoute.selected = Number(b.dataset.waypoint);
   WaypointRoute.mode = 'route';
+  WaypointRoute.customView = null;
   updateUI();
   drawMap();
 };
-map.addEventListener('click', (e) => {
-  let b = map.getBoundingClientRect(),
-    i = WaypointRoute.pick(
-      ((e.clientX - b.left) / b.width) * 260,
-      ((e.clientY - b.top) / b.height) * 235,
-    );
-  if (i >= 0) {
-    WaypointRoute.selected = i;
-    updateUI();
+function mapPosition(e) {
+  const bounds = map.getBoundingClientRect();
+  return {
+    x: ((e.clientX - bounds.left) / bounds.width) * 260,
+    y: ((e.clientY - bounds.top) / bounds.height) * 235,
+  };
+}
+function zoomMap(factor, point = { x: 130, y: 117.5 }) {
+  WaypointRoute.zoom(Gale, rover, climbIndex, factor, point.x, point.y);
+  drawMap();
+}
+document.querySelector('#map-zoom-in').onclick = () => zoomMap(0.7);
+document.querySelector('#map-zoom-out').onclick = () => zoomMap(1 / 0.7);
+document.querySelector('#map-recenter').onclick = () => {
+  WaypointRoute.customView = null;
+  drawMap();
+};
+map.addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    zoomMap(e.deltaY < 0 ? 0.8 : 1.25, mapPosition(e));
+  },
+  { passive: false },
+);
+let mapDrag = null;
+map.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || mapDrag) return;
+  const p = mapPosition(e);
+  mapDrag = { id: e.pointerId, start: p, last: p, moved: false };
+  map.setPointerCapture(e.pointerId);
+});
+map.addEventListener('pointermove', (e) => {
+  if (!mapDrag || mapDrag.id !== e.pointerId) return;
+  const p = mapPosition(e);
+  if (Math.hypot(p.x - mapDrag.start.x, p.y - mapDrag.start.y) > 3) mapDrag.moved = true;
+  if (mapDrag.moved) {
+    WaypointRoute.pan(Gale, rover, climbIndex, p.x - mapDrag.last.x, p.y - mapDrag.last.y);
     drawMap();
   }
+  mapDrag.last = p;
+});
+map.addEventListener('pointerup', (e) => {
+  if (!mapDrag || mapDrag.id !== e.pointerId) return;
+  if (!mapDrag.moved) {
+    const p = mapPosition(e),
+      i = WaypointRoute.pick(p.x, p.y);
+    if (i >= 0) {
+      WaypointRoute.selected = i;
+      updateUI();
+      drawMap();
+    }
+  }
+  mapDrag = null;
+});
+map.addEventListener('pointercancel', () => {
+  mapDrag = null;
+});
+map.addEventListener('lostpointercapture', () => {
+  mapDrag = null;
 });
 function resize() {
   if (graphics) graphics.resize();
@@ -250,6 +302,9 @@ function render() {
 function drawMap() {
   WaypointRoute.draw(mx, Gale, rover, climbIndex);
 }
+WaypointRoute.onTilesChanged = () => {
+  if (rover) drawMap();
+};
 
 function tick(t) {
   if (missionIntro.active) {
@@ -435,7 +490,7 @@ canvas.addEventListener('dblclick', () => {
 function travelTo(name) {
   const location = Gale.locations[name];
   if (!location) return;
-  const point = Gale.mapPoint(...location);
+  const point = name === 'landing' ? Gale.spawnPoint : Gale.mapPoint(...location);
   rover.x = point.x;
   rover.y = point.y;
   rover.v = 0;

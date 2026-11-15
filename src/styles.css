@@ -221,6 +221,14 @@ canvas#game {
   font: 500 12px 'DM Mono';
   color: #f0e3d5;
 }
+.map-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.map-hint {
+  margin: 8px 0 0;
+}
 .mapwrap {
   position: relative;
 }
@@ -230,6 +238,11 @@ canvas#game {
   aspect-ratio: 260/235;
   background: #2d2520;
   display: block;
+  touch-action: none;
+  cursor: grab;
+}
+.mapwrap canvas:active {
+  cursor: grabbing;
 }
 .mapfoot {
   display: flex;
