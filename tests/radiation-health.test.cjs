@@ -68,14 +68,14 @@ test('Mission ticks accumulate dose across cameras and boarding, but not before 
 test('Reset clears exposure; low health has an accessible bounded meter', () => {
   const game = createGame(),
     run = game.evaluate;
-  run('running=true; RadiationHealth.advance(8000, 0, true); render()');
+  run('running=true; RadiationHealth.advance(8000, 0, true); astronautHealth=70; render()');
   assert.equal(game.element('#health-panel').dataset.level, 'caution');
-  run('RadiationHealth.advance(20000, 8000, true); render()');
+  run('RadiationHealth.advance(20000, 8000, true); astronautHealth=0; render()');
   assert.equal(run('RadiationHealth.health'), 0);
   assert.equal(game.element('#health-panel').dataset.level, 'critical');
   assert.equal(game.element('#health-bar').getAttribute('aria-valuenow'), '0.0');
   assert.equal(game.element('#health-fill').style.width, '0%');
-  assert.equal(game.element('#health-status').textContent, 'DEPLETED');
+  assert.match(game.element('#health-status').textContent, /CRITICAL/);
   run('resetMission(); render()');
   assert.equal(run('RadiationHealth.health'), 100);
   assert.equal(run('RadiationHealth.doseMSv'), 0);

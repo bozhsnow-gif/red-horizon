@@ -43,8 +43,9 @@
           <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
         </div>
         <p class="time-note">
-          Local solar time is simulated. Sunrise, sunset, wind corridors and transition times are
-          approximate; the map does not show measured wind speeds.
+          One game minute passes per real second. Local solar time is simulated. Sunrise, sunset,
+          wind corridors and transition times are approximate; the map does not show measured wind
+          speeds.
         </p>
       </section>
       <div class="shell">
@@ -112,7 +113,7 @@
             <div class="health-reading">
               <span>Exposure rate</span><b id="health-rate">0.34 mSv/day</b>
             </div>
-            <p id="health-note">1 sol / min · Health scaled for play</p>
+            <p id="health-note">Dose replay: 1 source sol / min · Health is a game mechanic</p>
           </section>
           <section
             id="radiation-panel"
@@ -303,6 +304,17 @@
               <div class="controlrow">
                 <span>Run / collect</span><span class="small">DOUBLE ? ? P PICK UP</span>
               </div>
+              <div class="controlrow">
+                <span>Rocketship doors</span><span class="small">G OPEN / CLOSE</span>
+              </div>
+              <div class="controlrow">
+                <span>Rocketship shelter</span
+                ><button class="reset" id="shelter-toggle">H ENTER / EXIT</button>
+              </div>
+              <p class="small">
+                Open the doors with G, approach within 15 m of the rocketship centre, then press H
+                to shelter. Health recovery is a game mechanic; accumulated dose remains.
+              </p>
               <div class="controlrow">
                 <span>Free flight</span><span class="small">WASD · E ↑ / Q ↓</span>
               </div>
@@ -683,6 +695,7 @@
     <script src="radiation-data.js"></script>
     <script src="radiation.js"></script>
     <script src="radiation-health.js"></script>
+    <script src="gameplay-health.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

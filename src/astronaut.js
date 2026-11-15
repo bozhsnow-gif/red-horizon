@@ -61,7 +61,7 @@ export class AstronautView {
   }
   draw(eva, eye, vp, dt, firstPerson) {
     if (!this.loaded && !this.rocketship.loaded) return;
-    this.root.visible = !!(this.loaded && eva && !firstPerson);
+    this.root.visible = !!(this.loaded && eva && !eva.sheltered && !firstPerson);
     if (this.loaded && eva) {
       const state = eva.state || 'Idle';
       if (state !== this.state) {

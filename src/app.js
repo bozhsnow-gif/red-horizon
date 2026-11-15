@@ -21,6 +21,7 @@ let rover, samples, rocks, dist, elapsed, collected;
 let astronaut = null;
 let habitatSheltered = false, habitatCandidateTime = 0;
 let pendingInteriorSpawn = true;
+let astronautHealth = 100;
 let lastForwardTap = -Infinity;
 let rockSamples = 0;
 let marsTimeMinutes = 720;
@@ -147,6 +148,7 @@ function init() {
   updateMarsTime();
   collected = 0;
   rockSamples = 0;
+  astronautHealth = 100;
   graphics?.restoreRocks?.();
   document.querySelector('#science-title').textContent = 'Explore five geology stops';
   document.querySelector('#science-text').textContent =
@@ -318,13 +320,14 @@ function updateUI() {
   document.querySelector('#surface').textContent = Gale.materialAt(rover.x, rover.y).name;
   document.querySelector('#traction').textContent =
     Math.round((rover.traction || Gale.materialAt(rover.x, rover.y).traction) * 100) + '%';
-  document.querySelector('#sol').textContent = String(1 + Math.floor(elapsed / 88775.244)).padStart(
+  updateHealthUI();
+  document.querySelector('#sol').textContent = String(1 + Math.floor(elapsed / 1440)).padStart(
     3,
     '0',
   );
 }
 
-// A 24-hour Mars clock compresses one 24h 39m 35s sol into 24 clock hours.
+// Simulated Mars local solar time runs at one clock minute per real second.
 function updateMarsTime() {
   const minute = Math.floor(marsTimeMinutes) % 1440;
   const clock =
@@ -374,7 +377,7 @@ function terrain(x, y) {
 }
 function render() {
   if (pendingInteriorSpawn && running && !missionIntro.active && graphics?.astronautView?.loaded) {
-    const point = graphics.astronautView.rocketship?.interiorSpawn();
+    const point = graphics.astronautView.rocketship?.interiorSpawn?.();
     if (point) {
       astronaut = {
         ...point,
@@ -402,7 +405,7 @@ function render() {
   }
   graphics?.astronautView?.rocketship?.updateDoor?.(astronaut);
   const sheltered = habitatSheltered;
-  RadiationHealth.update(running && !missionIntro.active, elapsed, !!astronaut, sheltered);
+  updateHealthUI();
   RadiationMonitor.update(
     running && !!astronaut && firstPerson && !freeFlight && !birdsEye && !missionIntro.active,
     elapsed,
@@ -442,26 +445,34 @@ function tick(t) {
     requestAnimationFrame(tick);
     return;
   }
-  let dt = Math.max(0, Math.min((t - last) / 1000 || 0, 0.05));
+  const clockDt = Math.max(0, (t - last) / 1000 || 0);
+  const dt = Math.min(clockDt, 0.05);
   last = t;
   if (running) {
-    const detectedHabitat = !!graphics?.astronautView?.rocketship?.containsAstronaut(astronaut);
+    const detectedHabitat = !!graphics?.astronautView?.rocketship?.containsAstronaut?.(astronaut);
     if (!astronaut) { habitatSheltered = false; habitatCandidateTime = 0; }
     else if (detectedHabitat === habitatSheltered) habitatCandidateTime = 0;
     else if ((habitatCandidateTime += dt) >= 0.75) {
       habitatSheltered = detectedHabitat;
       habitatCandidateTime = 0;
     }
-    RadiationHealth.advance(dt, elapsed, !!astronaut, habitatSheltered);
-    elapsed += dt;
-    marsTimeMinutes = (marsTimeMinutes + (dt * 1440) / 88775.244) % 1440;
+    RadiationHealth.advance(
+      clockDt,
+      elapsed,
+      !!astronaut && !(astronaut.sheltered || habitatSheltered),
+      !!astronaut?.sheltered || habitatSheltered,
+    );
+    elapsed += clockDt;
+    marsTimeMinutes = (marsTimeMinutes + clockDt) % 1440;
+    if (astronaut)
+      astronautHealth = GameplayHealth.advance(astronautHealth, clockDt, astronaut.sheltered || habitatSheltered);
     updateMarsTime();
     let forward = keys.ArrowUp || keys.w || keys.W,
       back = keys.ArrowDown || keys.s || keys.S,
       left = keys.ArrowLeft || keys.a || keys.A,
       right = keys.ArrowRight || keys.d || keys.D;
     let beforeDrive = { x: rover.x, y: rover.y };
-    if (astronaut && !freeFlight)
+    if (astronaut && !astronaut.sheltered && !freeFlight)
       stepAstronaut(dt, {
         forward,
         back,
@@ -522,9 +533,69 @@ function tick(t) {
 function limitLookPitch(p) {
   return Math.max(freeFlight ? -1.45 : -0.55, Math.min(freeFlight ? 1.45 : 0.4, p));
 }
+function updateHealthUI() {
+  RadiationHealth.update(
+    running && !missionIntro.active,
+    elapsed,
+    !!astronaut && !(astronaut.sheltered || habitatSheltered),
+    astronautHealth,
+    !!astronaut?.sheltered || habitatSheltered,
+  );
+}
+function toggleShelter() {
+  if (!running || missionIntro.active) return;
+  if (!astronaut) {
+    message('LEAVE THE ROVER [F] TO USE THE SHELTER');
+    return;
+  }
+  if (freeFlight) {
+    message('RETURN TO THE ASTRONAUT FIRST [V]');
+    return;
+  }
+  if (astronaut.airborne || astronaut.pickup) return;
+  const lab = graphics?.astronautView?.rocketship;
+  if (!lab?.loaded) {
+    message('ROCKETSHIP LOADING');
+    return;
+  }
+  if (astronaut.sheltered) {
+    if (!lab.open) lab.toggle();
+    astronaut.x = astronaut.shelterEntry.x;
+    astronaut.y = astronaut.shelterEntry.y;
+    astronaut.z = evaSurface(astronaut.x, astronaut.y);
+    astronaut.sheltered = false;
+    astronaut.shelterEntry = null;
+    message('SHELTER EXIT · RADIATION EXPOSURE RESUMED');
+  } else {
+    const center = Gale.fromCoordinates(-4.5893, 137.4406);
+    if (Math.hypot(astronaut.x - center.x, astronaut.y - center.y) > 15 * Gale.unitsPerMeter) {
+      message('MOVE WITHIN 15 M OF THE ROCKETSHIP');
+      return;
+    }
+    if (!lab.open) {
+      message('OPEN ROCKETSHIP DOORS [G] FIRST');
+      return;
+    }
+    astronaut.shelterEntry = { x: astronaut.x, y: astronaut.y };
+    astronaut.x = center.x;
+    astronaut.y = center.y;
+    astronaut.z = evaSurface(center.x, center.y);
+    astronaut.sheltered = true;
+    astronaut.v = 0;
+    astronaut.state = 'Idle';
+    lab.toggle();
+    message('SHELTERED · HEALTH RECOVERS IN THIS GAME');
+  }
+  clearInput();
+  updateUI();
+}
+document.querySelector('#shelter-toggle').onclick = () => {
+  toggleShelter();
+  focusGame();
+};
 function evaSurface(x, y) {
   const terrainZ = graphics ? graphics.surface(x, y) : terrain(x, y);
-  const floor = graphics?.astronautView?.rocketship?.floorHeight(
+  const floor = graphics?.astronautView?.rocketship?.floorHeight?.(
     x,
     y,
     (astronaut?.z ?? terrainZ) + Gale.unitsPerMeter * 0.65,
@@ -534,6 +605,10 @@ function evaSurface(x, y) {
 function toggleAstronaut() {
   if (!running || missionIntro.active) return;
   if (astronaut) {
+    if (astronaut.sheltered) {
+      message('EXIT THE SHELTER FIRST [H]');
+      return;
+    }
     if (astronaut.pickup || astronaut.airborne) return;
     if (Math.hypot(astronaut.x - rover.x, astronaut.y - rover.y) > 100) {
       message('MOVE CLOSER TO THE ROVER TO BOARD');
@@ -587,7 +662,8 @@ function toggleAstronaut() {
   focusGame();
 }
 function pickupNearby() {
-  if (!astronaut || freeFlight || astronaut.airborne || astronaut.pickup) return;
+  if (!astronaut || astronaut.sheltered || freeFlight || astronaut.airborne || astronaut.pickup)
+    return;
   const reach = 2 * Gale.unitsPerMeter;
   const candidates = [
     ...samples.filter((s) => !s.got).map((item) => ({ item, kind: 'sample' })),
@@ -648,7 +724,7 @@ function stepAstronaut(dt, input) {
   const stride = (actor.v * dt) / (magnitude || 1);
   const dx = (Math.sin(actor.a) * direction + Math.cos(actor.a) * sideways) * stride;
   const dy = (-Math.cos(actor.a) * direction + Math.sin(actor.a) * sideways) * stride;
-  const moved = graphics?.astronautView?.rocketship?.moveAstronaut(actor, dx, dy) || {x: actor.x + dx, y: actor.y + dy};
+  const moved = graphics?.astronautView?.rocketship?.moveAstronaut?.(actor, dx, dy) || {x: actor.x + dx, y: actor.y + dy};
   dist += Math.hypot(moved.x - actor.x, moved.y - actor.y);
   actor.x = Math.max(0, Math.min(Gale.widthUnits, moved.x));
   actor.y = Math.max(0, Math.min(Gale.heightUnits, moved.y));
@@ -889,6 +965,18 @@ window.addEventListener('keydown', (e) => {
     isInteractiveTarget(e.target)
   )
     return;
+  if (e.code === 'KeyH' && !e.repeat) {
+    e.preventDefault();
+    toggleShelter();
+    return;
+  }
+  if (e.code === 'KeyG' && !e.repeat) {
+    e.preventDefault();
+    const lab = graphics?.astronautView?.rocketship;
+    if (!lab?.loaded) message('ROCKETSHIP LOADING');
+    else message(lab.toggle() ? 'ROCKETSHIP DOORS OPENING' : 'ROCKETSHIP DOORS CLOSING');
+    return;
+  }
   if (e.code === 'KeyF' && !e.shiftKey) {
     e.preventDefault();
     if (!e.repeat) toggleAstronaut();
@@ -906,7 +994,7 @@ window.addEventListener('keydown', (e) => {
   }
   if (e.code === 'Space' && astronaut && !freeFlight) {
     e.preventDefault();
-    if (!e.repeat && !astronaut.airborne && !astronaut.pickup) {
+    if (!e.repeat && !astronaut.sheltered && !astronaut.airborne && !astronaut.pickup) {
       astronaut.airborne = true;
       astronaut.vz = 2.7 * Gale.unitsPerMeter;
       astronaut.state = 'Jump';
