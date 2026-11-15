@@ -42,6 +42,12 @@ The rover stays parked during free flight. Exploration mode is accelerated for p
 
 The route follows a simplified snapshot of NASA’s Curiosity rover path. Named stops are approximate matches to the supplied screenshots. Small intermediate checkpoints preserve its bends. Arrive within 12 m of the next driving checkpoint to advance; flying over it does not count.
 
+## Gale wind visualization
+
+The simulated Mars local solar time slider drives a conceptual wind overlay on the map. Choose **View Crater Winds** for the full pattern; the wind overlay can also be turned off. Red corridors represent the crater rim, yellow corridors the slopes of Mount Sharp, and blue corridors the northern depression. Arrows point in the direction of travel. The user-specified morning and evening schedules smoothly change the directions and visibility of the three streams, with staggered transitions. Relative visibility is illustrative and is not a wind-speed measurement.
+
+The [NASA wind illustration](https://science.nasa.gov/resource/mountain-winds-at-gale-crater/) describes daytime upslope and evening/overnight downslope patterns but does not supply georeferenced streamlines or exact transition times. Corridor positions, directions between the illustrated regions, transition hours, and the relationship between visibility and time are approximate. The clock is simulated, not a live Mars clock; the day/night shading uses illustrative sunrise and sunset times.
+
 ## Project layout
 
 | Path                                                            | Purpose                                                               |

@@ -22,9 +22,35 @@
           <span class="tiny">Gale crater · Mars</span><span class="tiny online">Rover online</span>
         </div>
       </header>
+      <section class="timebar" aria-label="Gale Crater time of day">
+        <div class="timebar-heading">
+          <div>
+            <span class="label">GALE LTST · SIMULATED</span><strong id="mars-clock">12:00</strong>
+          </div>
+          <span id="time-phase">DAY</span>
+        </div>
+        <label class="small" for="time-slider">Explore a Martian day</label>
+        <input
+          type="range"
+          id="time-slider"
+          min="0"
+          max="1439"
+          step="1"
+          value="720"
+          aria-label="Choose simulated local time"
+        />
+        <div class="time-ticks" aria-hidden="true">
+          <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>24:00</span>
+        </div>
+        <p class="time-note">
+          Local solar time is simulated. Sunrise, sunset, wind corridors and transition times are
+          approximate; the map does not show measured wind speeds.
+        </p>
+      </section>
       <div class="shell">
         <section class="view" aria-label="Rover exploration game">
           <canvas id="game" tabindex="0" aria-label="Rover driving view"></canvas>
+          <div id="night-overlay" class="night-overlay" aria-hidden="true"></div>
           <div class="viewtop">
             <div class="chip"><b>●</b> LIVE FEED &nbsp; / &nbsp; ROVER 01</div>
             <div class="cross">
@@ -110,6 +136,11 @@
               <button class="reset" id="map-zoom-out" aria-label="Zoom out">−</button>
               <button class="reset" id="map-recenter">RECENTER</button>
             </div>
+            <div class="wind-controls">
+              <button class="reset" id="wind-toggle" aria-pressed="true">WIND OVERLAY</button>
+              <button class="reset" id="wind-overview">VIEW CRATER WINDS</button>
+            </div>
+            <p class="wind-phase" id="wind-phase" aria-live="polite"></p>
             <div class="mapwrap">
               <canvas
                 id="map"
@@ -120,6 +151,20 @@
             </div>
             <p class="small map-hint">
               Drag to pan · scroll or use + / − to zoom · Imagery: NASA/JPL-Caltech, tinted
+            </p>
+            <p class="wind-legend">
+              <span class="wind-rim">● Rim</span><span class="wind-mountain">↗ Mount Sharp</span
+              ><span class="wind-depression">● Depression</span>
+            </p>
+            <p class="small map-hint">
+              Arrows point where air travels. Corridors and timing are illustrative; no wind speeds
+              are measured.
+              <a
+                href="https://science.nasa.gov/resource/mountain-winds-at-gale-crater/"
+                target="_blank"
+                rel="noopener"
+                >NASA wind reference</a
+              >
             </p>
             <div class="mapfoot">
               <div class="legend">
@@ -429,6 +474,7 @@
     <script src="route-dem-data.js"></script>
     <script src="route-terrain.js"></script>
     <script src="traverse-data.js"></script>
+    <script src="wind.js"></script>
     <script src="waypoints.js"></script>
     <script src="landing-reference.js"></script>
     <script src="renderer.js"></script>

@@ -21,6 +21,9 @@ let rover, samples, rocks, dist, elapsed, collected;
 let astronaut = null;
 let lastForwardTap = -Infinity;
 let rockSamples = 0;
+let marsTimeMinutes = 720;
+let windDisplayStates = null,
+  windAnimationId = 0;
 let pendingMissionAction = null;
 const missionIntro = new MissionIntro({
   onStart() {
@@ -131,6 +134,10 @@ function init() {
   if (graphics) graphics.rockSources = rocks;
   dist = 0;
   elapsed = 0;
+  marsTimeMinutes = 720;
+  windDisplayStates = null;
+  windAnimationId++;
+  updateMarsTime();
   collected = 0;
   rockSamples = 0;
   graphics?.restoreRocks?.();
@@ -191,6 +198,21 @@ function zoomMap(factor, point = { x: 130, y: 117.5 }) {
 }
 document.querySelector('#map-zoom-in').onclick = () => zoomMap(0.7);
 document.querySelector('#map-zoom-out').onclick = () => zoomMap(1 / 0.7);
+document.querySelector('#wind-toggle').onclick = () => {
+  WaypointRoute.showWind = WaypointRoute.showWind === false;
+  document
+    .querySelector('#wind-toggle')
+    .setAttribute('aria-pressed', String(WaypointRoute.showWind));
+  drawMap();
+};
+document.querySelector('#wind-overview').onclick = () => {
+  WaypointRoute.mode = 'crater';
+  WaypointRoute.customView = null;
+  WaypointRoute.showWind = true;
+  document.querySelector('#wind-toggle').setAttribute('aria-pressed', 'true');
+  updateUI();
+  drawMap();
+};
 document.querySelector('#map-recenter').onclick = () => {
   WaypointRoute.customView = null;
   drawMap();
@@ -295,6 +317,51 @@ function updateUI() {
   );
 }
 
+// A 24-hour Mars clock compresses one 24h 39m 35s sol into 24 clock hours.
+function updateMarsTime() {
+  const minute = Math.floor(marsTimeMinutes) % 1440;
+  const clock =
+    String(Math.floor(minute / 60)).padStart(2, '0') + ':' + String(minute % 60).padStart(2, '0');
+  document.querySelector('#mars-clock').textContent = clock;
+  document.querySelector('#time-slider').value = String(minute);
+  const daylight = Math.max(0, Math.sin((Math.PI * (marsTimeMinutes / 60 - 6)) / 12));
+  document.querySelector('#time-phase').textContent =
+    daylight > 0 ? 'DAY · APPROXIMATE' : 'NIGHT · APPROXIMATE';
+  document.querySelector('#wind-phase').textContent = GaleWind.phase(marsTimeMinutes);
+  document.querySelector('#night-overlay').style.opacity = String((1 - daylight) * 0.7);
+}
+function animateWindSelection(previousMinutes) {
+  const id = ++windAnimationId;
+  const from =
+    windDisplayStates || GaleWind.streams.map((stream) => GaleWind.state(previousMinutes, stream));
+  const target = GaleWind.streams.map((stream) => GaleWind.state(marsTimeMinutes, stream));
+  const start = performance.now();
+  windDisplayStates = from;
+  drawMap();
+  let lastDraw = -Infinity;
+  function frame(now) {
+    if (id !== windAnimationId) return;
+    const t = GaleWind.smooth(0, 350, now - start);
+    windDisplayStates = from.map((state, i) => ({
+      rotation: state.rotation + (target[i].rotation - state.rotation) * t,
+      intensity: state.intensity + (target[i].intensity - state.intensity) * t,
+    }));
+    if (now - lastDraw >= 50 || t === 1) {
+      drawMap();
+      lastDraw = now;
+    }
+    if (t < 1) requestAnimationFrame(frame);
+    else windDisplayStates = null;
+  }
+  requestAnimationFrame(frame);
+}
+document.querySelector('#time-slider').addEventListener('input', (event) => {
+  const previous = marsTimeMinutes;
+  marsTimeMinutes = Number(event.target.value);
+  updateMarsTime();
+  if (rover) animateWindSelection(previous);
+});
+
 function terrain(x, y) {
   return Gale.height(x, y);
 }
@@ -316,7 +383,7 @@ function render() {
     );
 }
 function drawMap() {
-  WaypointRoute.draw(mx, Gale, astronaut || rover, climbIndex);
+  WaypointRoute.draw(mx, Gale, astronaut || rover, climbIndex, marsTimeMinutes, windDisplayStates);
 }
 WaypointRoute.onTilesChanged = () => {
   if (rover) drawMap();
@@ -332,6 +399,8 @@ function tick(t) {
   last = t;
   if (running) {
     elapsed += dt;
+    marsTimeMinutes = (marsTimeMinutes + (dt * 1440) / 88775.244) % 1440;
+    updateMarsTime();
     let forward = keys.ArrowUp || keys.w || keys.W,
       back = keys.ArrowDown || keys.s || keys.S,
       left = keys.ArrowLeft || keys.a || keys.A,

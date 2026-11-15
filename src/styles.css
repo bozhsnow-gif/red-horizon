@@ -82,6 +82,58 @@ button {
   margin-right: 8px;
   box-shadow: 0 0 8px #9fbd76;
 }
+.timebar {
+  border: 1px solid var(--line);
+  background: #211f1d;
+  padding: 14px 18px 12px;
+  margin-bottom: 18px;
+}
+.timebar-heading,
+.time-ticks {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.timebar-heading strong {
+  margin-left: 16px;
+  color: #ffd59c;
+  font:
+    500 22px 'DM Mono',
+    monospace;
+}
+#time-phase {
+  color: #eab58c;
+  font:
+    500 11px 'DM Mono',
+    monospace;
+  letter-spacing: 0.12em;
+}
+#time-slider {
+  display: block;
+  width: 100%;
+  margin: 10px 0 4px;
+  accent-color: #e99360;
+  cursor: pointer;
+}
+.time-ticks,
+.time-note {
+  color: var(--muted);
+  font:
+    10px 'DM Mono',
+    monospace;
+}
+.time-note {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+.night-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #0a1735;
+  mix-blend-mode: multiply;
+  opacity: 0;
+}
 .shell {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 305px;
@@ -220,6 +272,44 @@ canvas#game {
 .big {
   font: 500 12px 'DM Mono';
   color: #f0e3d5;
+}
+.wind-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 8px;
+}
+.wind-controls .reset {
+  font-size: 9px;
+}
+.wind-controls [aria-pressed='true'] {
+  border-color: #e99360;
+  color: #ffd6ad;
+}
+.wind-phase {
+  color: #d5c4b2;
+  font:
+    10px 'DM Mono',
+    monospace;
+  margin: 8px 0;
+}
+.wind-legend {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  font:
+    10px 'DM Mono',
+    monospace;
+  margin: 10px 0 0;
+}
+.wind-rim {
+  color: #ff7179;
+}
+.wind-mountain {
+  color: #ffdc55;
+}
+.wind-depression {
+  color: #6bcaff;
 }
 .map-controls {
   display: flex;

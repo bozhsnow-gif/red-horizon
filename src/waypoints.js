@@ -325,7 +325,7 @@ const WaypointRoute = {
       ctx.fillText(p.name, box.left + 4, box.top + height / 2);
     }
   },
-  draw(ctx, g, r, index) {
+  draw(ctx, g, r, index, windMinutes = 720, windDisplayStates = null) {
     const m = GALE_TOPOGRAPHY,
       v = this.view(g, r, index),
       px = (x) => ((x - v.x) / v.w) * 260,
@@ -369,6 +369,7 @@ const WaypointRoute = {
       }
       ctx.stroke();
     }
+    if (this.showWind !== false) GaleWind.draw(ctx, g, px, py, windMinutes, windDisplayStates);
     const points = g.climbRoute,
       all = [g.spawnPoint, ...points];
     for (let i = 1; i < all.length; i++) {

@@ -51,7 +51,7 @@ test('Registered route preserves scale, travel order, provenance, labels and sel
   const sandbox = { console };
   vm.createContext(sandbox);
   vm.runInContext(
-    ['gale-topography', 'gale', 'traverse-data', 'waypoints']
+    ['gale-topography', 'gale', 'traverse-data', 'wind', 'waypoints']
       .map((p) => fs.readFileSync(path.join(sourceRoot, p + '.js'), 'utf8'))
       .join('\n'),
     sandbox,
