@@ -137,7 +137,7 @@
               <button class="reset" id="map-recenter">RECENTER</button>
             </div>
             <div class="wind-controls">
-              <button class="reset" id="wind-toggle" aria-pressed="true">WIND OVERLAY</button>
+              <button class="reset" id="wind-toggle" aria-pressed="true">WIND MAP + 3D</button>
               <button class="reset" id="wind-overview">VIEW CRATER WINDS</button>
             </div>
             <p class="wind-phase" id="wind-phase" aria-live="polite"></p>
@@ -153,12 +153,12 @@
               Drag to pan · scroll or use + / − to zoom · Imagery: NASA/JPL-Caltech, tinted
             </p>
             <p class="wind-legend">
-              <span class="wind-rim">● Rim</span><span class="wind-mountain">↗ Mount Sharp</span
+              <span class="wind-rim">● Rim</span><span class="wind-mountain">● Mount Sharp</span
               ><span class="wind-depression">● Depression</span>
             </p>
             <p class="small map-hint">
-              Arrows point where air travels. Corridors and timing are illustrative; no wind speeds
-              are measured.
+              Arrows show wind direction on the map and in the crater overview. Faint drifting dust
+              in the rover view is illustrative, not a measured wind speed or dust event.
               <a
                 href="https://science.nasa.gov/resource/mountain-winds-at-gale-crater/"
                 target="_blank"
@@ -475,6 +475,7 @@
     <script src="route-terrain.js"></script>
     <script src="traverse-data.js"></script>
     <script src="wind.js"></script>
+    <script src="wind-scene.js"></script>
     <script src="waypoints.js"></script>
     <script src="landing-reference.js"></script>
     <script src="renderer.js"></script>

@@ -380,6 +380,11 @@ function render() {
       freeFlight,
       keys,
       climbIndex,
+      {
+        enabled: WaypointRoute.showWind !== false,
+        minutes: marsTimeMinutes,
+        states: windDisplayStates,
+      },
     );
 }
 function drawMap() {

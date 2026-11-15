@@ -97,6 +97,29 @@ class MarsRenderer {
   precision highp float;void main(){}`;
     this.program = this.programFrom(vs, fs);
     this.depthProgram = this.programFrom(depthVs, depthFs);
+    this.windProgram = this.programFrom(
+      `#version 300 es
+      precision highp float;
+      layout(location=0) in vec3 position; layout(location=1) in vec4 color;
+      uniform mat4 viewProjection; uniform vec3 eye; out vec4 tint;
+      void main(){tint=color;gl_Position=viewProjection*vec4(position-eye,1.);}`,
+      `#version 300 es
+      precision highp float; in vec4 tint; out vec4 outColor;
+      void main(){outColor=tint;}`,
+    );
+    this.windUniforms = {
+      viewProjection: gl.getUniformLocation(this.windProgram, 'viewProjection'),
+      eye: gl.getUniformLocation(this.windProgram, 'eye'),
+    };
+    this.windVao = gl.createVertexArray();
+    this.windBuffer = gl.createBuffer();
+    gl.bindVertexArray(this.windVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.windBuffer);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 28, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 28, 12);
+
     this.skyProgram = this.programFrom(
       `#version 300 es
    precision highp float;out vec2 screen;
@@ -657,6 +680,33 @@ class MarsRenderer {
     }
     return model;
   }
+  drawWind(actor, eye, vp, time, overview, wind) {
+    if (!wind?.enabled) return;
+    const data = WindScene.build(
+      Gale,
+      GaleWind,
+      (x, y) => this.surface(x, y),
+      actor,
+      time,
+      wind.minutes,
+      wind.states,
+      overview,
+    );
+    if (!data.length) return;
+    const gl = this.gl;
+    gl.useProgram(this.windProgram);
+    gl.uniformMatrix4fv(this.windUniforms.viewProjection, false, vp);
+    gl.uniform3fv(this.windUniforms.eye, eye);
+    gl.bindVertexArray(this.windVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.windBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    gl.drawArrays(gl.TRIANGLES, 0, data.length / 7);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
   render(
     rover,
     samples,
@@ -669,6 +719,7 @@ class MarsRenderer {
     freeFlight = false,
     keys = {},
     routeIndex = 0,
+    wind = null,
   ) {
     let gl = this.gl,
       dt = Math.min(0.05, (time - this.last) / 1000 || 0.016);
@@ -857,6 +908,7 @@ class MarsRenderer {
             ),
           );
     this.astronautView?.draw(this.eva, eye, vp, dt, firstPerson);
+    this.drawWind(this.flight ? { x: eye[0], y: eye[1] } : subject, eye, vp, time, overview, wind);
     this.fpsFrames++;
     if (time - this.fpsTime > 1000) {
       let fps = Math.round((this.fpsFrames * 1000) / (time - this.fpsTime));

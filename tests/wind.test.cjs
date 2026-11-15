@@ -64,3 +64,30 @@ test('Fixed wind corridors follow regional terrain and the map responds to time 
     { x: 20, y: 50 },
   ]);
 });
+
+test('3D wind follows the same mapped corridors and reverses with Mars time', () => {
+  const game = createGame({ renderer: true, molaBackground: true });
+  const result = game.evaluate(`(()=>{
+    const actor = Gale.fromCoordinates(-4.65,137.44);
+    const day = WindScene.nearest(Gale,GaleWind,actor,720,null);
+    const night = WindScene.nearest(Gale,GaleWind,actor,1320,null);
+    const build = overview => WindScene.build(Gale,GaleWind,(x,y)=>Gale.height(x,y),actor,1000,720,null,overview);
+    const local = build(0), crater = build(1);
+    return {day, night, localCount: local.length, craterCount: crater.length,
+      finite: [...local,...crater].every(Number.isFinite)};
+  })()`);
+  assert.equal(result.day.stream, 'depression');
+  assert(result.day.distance < 1);
+  assert(
+    result.day.direction[0] * result.night.direction[0] +
+      result.day.direction[1] * result.night.direction[1] <
+      -0.999,
+  );
+  assert(result.localCount > 0, 'nearby view has illustrative dust');
+  assert(result.craterCount > 0, 'crater overview has directional arrows');
+  assert(result.finite);
+  const far = game.evaluate(
+    `WindScene.nearest(Gale,GaleWind,Gale.fromCoordinates(-10,130),720,null).distance / Gale.unitsPerMeter`,
+  );
+  assert(far > 12000);
+});
