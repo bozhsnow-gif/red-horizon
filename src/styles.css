@@ -218,6 +218,20 @@ canvas#game {
   flex-direction: column;
   gap: 14px;
 }
+.sidebar-menu > summary {
+  cursor: pointer;
+  padding: 16px 20px;
+  border: 1px solid #675246;
+  color: #e4b58d;
+  font: 12px monospace;
+  letter-spacing: 1px;
+}
+.sidebar-menu[open] > summary {
+  margin-bottom: 12px;
+}
+.sidebar-menu > .panel + .panel {
+  margin-top: 12px;
+}
 .panel {
   border: 1px solid var(--line);
   background: #20201e;
@@ -768,4 +782,253 @@ summary {
 }
 #waypoint-source[hidden] {
   display: none;
+}
+.view {
+  min-height: 650px;
+}
+.health-panel {
+  --health-color: #9bd6af;
+  position: absolute;
+  z-index: 4;
+  right: 16px;
+  top: 122px;
+  width: 230px;
+  max-width: calc(100% - 32px);
+  padding: 12px;
+  box-sizing: border-box;
+  background: #171815ed;
+  border: 1px solid #d9b18b88;
+  color: #eddac8;
+  font: 10px/1.5 monospace;
+  pointer-events: none;
+}
+.health-panel[hidden] {
+  display: none;
+}
+.health-panel[data-level='caution'] {
+  --health-color: #ffd270;
+}
+.health-panel[data-level='critical'] {
+  --health-color: #ff7975;
+}
+.health-heading,
+.health-reading,
+.health-state {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.health-heading {
+  letter-spacing: 1px;
+}
+#health-value {
+  font-size: 20px;
+  color: var(--health-color);
+  font-variant-numeric: tabular-nums;
+}
+.health-bar {
+  height: 9px;
+  margin: 7px 0;
+  overflow: hidden;
+  border: 1px solid #ffffff26;
+  background: #ffffff0d;
+}
+.health-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--health-color);
+  transition:
+    width 0.25s linear,
+    background-color 0.3s;
+}
+.health-state {
+  font-size: 8px;
+  margin-bottom: 6px;
+  color: var(--health-color);
+}
+.health-reading b {
+  font-variant-numeric: tabular-nums;
+}
+.health-panel p {
+  margin: 7px 0 0;
+  color: #bcad9f;
+  font: 9px/1.5 monospace;
+}
+@media (max-width: 560px) {
+  .health-panel {
+    top: 64px;
+    right: 12px;
+    width: 156px;
+    padding: 8px;
+    font-size: 8px;
+  }
+  #health-value {
+    font-size: 16px;
+  }
+  .health-state {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+  }
+  .health-panel p {
+    font-size: 8px;
+  }
+  .view:has(#health-panel:not([hidden])) .coordinates {
+    top: 210px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .health-fill {
+    transition: none;
+  }
+}
+.radiation-panel {
+  position: absolute;
+  z-index: 4;
+  right: 16px;
+  bottom: 88px;
+  width: min(380px, calc(100% - 32px));
+  padding: 12px;
+  border: 1px solid #d9b18b88;
+  background: #171815ed;
+  color: #eddac8;
+  box-sizing: border-box;
+  font: 10px/1.5 monospace;
+}
+.shield-open {
+  margin: 0 0 18px;
+  width: 100%;
+}
+.shield-dialog {
+  width: min(940px, calc(100vw - 32px));
+  max-height: 90vh;
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 24px;
+  background: #1b1d1c;
+  color: #eadbcb;
+  border: 1px solid #9c775a;
+}
+.shield-dialog::backdrop {
+  background: #000b;
+}
+.shield-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.shield-header h2 {
+  margin: 8px 0;
+  font-size: 24px;
+}
+.shield-dialog p {
+  color: #cdb8a4;
+  line-height: 1.5;
+  font-size: 13px;
+}
+.shield-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin: 16px 0;
+  font: 13px monospace;
+}
+.shield-controls label {
+  cursor: pointer;
+}
+.shield-controls input {
+  accent-color: #62d2d3;
+}
+.shield-scene svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.shield-scene:not(.magnet-on) .field-lines,
+.shield-scene:not(.magnet-on) .charged-bent,
+.shield-scene.magnet-on .charged-straight,
+.shield-scene:not(.water-on) .shield-water-layer,
+.shield-scene:not(.water-on) .neutron-blocked,
+.shield-scene.water-on .neutron-through {
+  display: none;
+}
+.shield-explanation {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+.shield-explanation b {
+  color: #f4debe;
+}
+.shield-disclaimer {
+  border-top: 1px solid #695448;
+  padding-top: 12px;
+}
+@media (max-width: 600px) {
+  .shield-dialog {
+    padding: 16px;
+  }
+  .shield-explanation {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .shield-header h2 {
+    font-size: 19px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shield-scene animateMotion {
+    display: none;
+  }
+}
+.radiation-panel[hidden] {
+  display: none;
+}
+.radiation-heading,
+.radiation-readings {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.radiation-heading {
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.radiation-readings b {
+  font-size: 15px;
+}
+.radiation-plastic {
+  color: #ff7975;
+}
+.radiation-silicon {
+  color: #dce8ef;
+}
+#radiation-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 6px 0;
+  pointer-events: none;
+}
+.radiation-status {
+  color: #ffd270;
+  font-size: 9px;
+}
+.radiation-panel p {
+  font: 9px/1.5 monospace;
+  margin: 6px 0 0;
+  color: #bcad9f;
+}
+.radiation-panel a {
+  color: #eddac8;
+}
+@media (max-width: 560px) {
+  .radiation-panel {
+    bottom: 128px;
+    right: 12px;
+    width: min(300px, calc(100% - 24px));
+    padding: 8px;
+  }
 }

@@ -36,4 +36,6 @@ The crop includes the bundled NASA route plus a 500 m buffer; its outer 200 m bl
 
 The wider crater now defaults to a bundled NASA MOLA MEGDR crop (462 by 450 native samples), replacing the image-derived backdrop. Source and SHA256 hashes are recorded in `src/mola-background.js`; reproduce using `node scripts/import-mola-background.cjs`. Surface grain and small stones remain illustrative, not individually measured rocks.
 
-`src/rocketship-laboratory.glb` is exported from the user's Blender scene `Documents/blender/rocketship__lab.blend`, preserving Blender metre scale. The separate Blender ground, stones, lights and cameras are excluded. Its horizontal centre is placed20metres south of the rover spawn. Three Blender hinge clips drive the two garage doors and habitat entrance; press G to open/close. Stationary meshes are batched; animated door hierarchies remain intact.
+`src/rocketship-laboratory.glb` is an unused export from the user's Blender scene `Documents/blender/rocketship__lab.blend`; it is retained as a source asset and is not loaded in the game.
+
+`src/rocketshipmagnet.glb` is exported from the user's rocketshipmagnet Blender scene, excluding studio ground and lights. It is centered at 4.5893° S, 137.4406° E; the hatch animation is retained in the asset and starts closed.

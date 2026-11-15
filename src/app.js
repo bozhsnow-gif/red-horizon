@@ -110,7 +110,6 @@ function init() {
   uiTimer = 0;
   last = performance.now();
   if (graphics) graphics.resetMotion();
-  graphics?.astronautView?.laboratory?.reset();
   let landing = Gale.mapPoint(...Gale.locations.landing),
     spawn = Gale.spawnPoint;
   rover = { x: spawn.x, y: spawn.y, a: Math.PI, v: 0 };
@@ -134,6 +133,8 @@ function init() {
   if (graphics) graphics.rockSources = rocks;
   dist = 0;
   elapsed = 0;
+  RadiationHealth.reset();
+  RadiationMonitor.lastKey = null;
   marsTimeMinutes = 720;
   windDisplayStates = null;
   windAnimationId++;
@@ -366,6 +367,11 @@ function terrain(x, y) {
   return Gale.height(x, y);
 }
 function render() {
+  RadiationHealth.update(running && !missionIntro.active, elapsed, !!astronaut);
+  RadiationMonitor.update(
+    running && !!astronaut && firstPerson && !freeFlight && !birdsEye && !missionIntro.active,
+    elapsed,
+  );
   if (graphics) graphics.eva = astronaut;
   if (graphics)
     graphics.render(
@@ -395,14 +401,15 @@ WaypointRoute.onTilesChanged = () => {
 };
 
 function tick(t) {
-  if (missionIntro.active) {
+  if (missionIntro.active || document.hidden) {
     last = t;
     requestAnimationFrame(tick);
     return;
   }
-  let dt = Math.min((t - last) / 1000 || 0, 0.05);
+  let dt = Math.max(0, Math.min((t - last) / 1000 || 0, 0.05));
   last = t;
   if (running) {
+    RadiationHealth.advance(dt, elapsed, !!astronaut);
     elapsed += dt;
     marsTimeMinutes = (marsTimeMinutes + (dt * 1440) / 88775.244) % 1440;
     updateMarsTime();
@@ -597,7 +604,7 @@ function stepAstronaut(dt, input) {
   dist += Math.hypot(dx, dy);
   const floor = evaSurface(actor.x, actor.y);
   if (actor.airborne) {
-    actor.vz -= 3.71 * Gale.unitsPerMeter * dt;
+    actor.vz -= Gale.gravity * Gale.unitsPerMeter * dt;
     actor.z += actor.vz * dt;
     if (actor.z <= floor) {
       actor.z = floor;
@@ -722,6 +729,7 @@ for (let event of ['pointerup', 'pointercancel', 'lostpointercapture'])
   canvas.addEventListener(event, endLook);
 window.addEventListener('blur', clearInput);
 document.addEventListener('visibilitychange', () => {
+  last = performance.now();
   if (document.hidden) clearInput();
 });
 document.addEventListener('focusin', (e) => {
@@ -803,9 +811,24 @@ function isInteractiveTarget(target) {
     ['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT', 'SUMMARY', 'A'].includes(target?.tagName)
   );
 }
+const shieldDialog = document.querySelector('#shield-dialog');
+const shieldScene = document.querySelector('#shield-scene');
+document.querySelector('#shield-open').addEventListener('click', () => {
+  clearInput();
+  shieldDialog.showModal();
+});
+document.querySelector('#shield-close').addEventListener('click', () => shieldDialog.close());
+for (const [selector, name] of [
+  ['#shield-magnet', 'magnet-on'],
+  ['#shield-water', 'water-on'],
+]) {
+  const input = document.querySelector(selector);
+  input.addEventListener('change', () => shieldScene.classList.toggle(name, input.checked));
+}
 window.addEventListener('keydown', (e) => {
   if (
     missionIntro.active ||
+    shieldDialog.open ||
     !running ||
     e.ctrlKey ||
     e.metaKey ||
@@ -813,13 +836,6 @@ window.addEventListener('keydown', (e) => {
     isInteractiveTarget(e.target)
   )
     return;
-  if (e.code === 'KeyG' && !e.repeat) {
-    e.preventDefault();
-    const lab = graphics?.astronautView?.laboratory;
-    if (!lab?.loaded) message('LABORATORY LOADING');
-    else message(lab.toggle() ? 'LABORATORY DOORS OPENING' : 'LABORATORY DOORS CLOSING');
-    return;
-  }
   if (e.code === 'KeyF' && !e.shiftKey) {
     e.preventDefault();
     if (!e.repeat) toggleAstronaut();

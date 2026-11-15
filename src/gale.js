@@ -123,7 +123,7 @@ const Gale = {
     return Math.abs(value).toFixed(this.measured ? 4 : 2) + '° ' + (value < 0 ? 'W' : 'E');
   },
   unitsPerMeter: 18,
-  gravity: 3.71,
+  gravity: 9.81 * 0.38,
   simulationTopSpeed: 0.04,
   explorationSpeedMultiplier: 2.2,
   materials: {
@@ -201,8 +201,9 @@ const Gale = {
   height(x, y) {
     return (
       (this.elevationMeters(x, y) - GALE_TOPOGRAPHY.minLegend) *
-      this.unitsPerMeter *
-      this.terrainScale
+        this.unitsPerMeter *
+        this.terrainScale +
+      (typeof GroundIndents !== 'undefined' ? GroundIndents.offset(x, y) : 0)
     );
   },
   observations: [

@@ -25,10 +25,12 @@ class MarsRenderer {
     const fs = `#version 300 es
   precision highp float;in vec3 world,n,c;in vec4 shadowCoord;uniform sampler2D shadowMap,surfaceDetail;uniform vec3 eye;uniform float ground;uniform float overview;uniform vec3 terrainElevation;uniform vec4 geoOrigin;uniform vec2 geoScale;uniform vec3 contacts[4];uniform vec4 routeBounds,routeDetailBounds;out vec4 outColor;
   ${atmosphere}
+  uniform vec4 indentBounds;
   bool insideBounds(vec4 bounds){return world.x>=bounds.x+1.&&world.y>=bounds.y+1.&&world.x<=bounds.z-1.&&world.y<=bounds.w-1.;}
   void main(){
   if(ground>1.5&&ground<2.5&&insideBounds(routeBounds))discard;
-  if(ground>2.5&&insideBounds(routeDetailBounds))discard;
+  if(ground>2.5&&ground<3.5&&insideBounds(routeDetailBounds))discard;
+  if(ground>1.5&&ground<4.5&&insideBounds(indentBounds))discard;
   if(ground<-.5){outColor=vec4(ground>-1.5?vec3(.46,.74,.55):ground>-2.5?vec3(1.,.82,.44):vec3(.70,.76,.81),1.);return;}vec3 normal=normalize(n);if(!gl_FrontFacing)normal=-normal;vec3 sun=normalize(vec3(-.82,-.18,.55));vec3 reliefNormal=normalize(vec3(normal.xy*mix(1.,4.,overview*step(.5,ground)),normal.z));float diffuse=max(dot(reliefNormal,sun),0.);vec3 sc=shadowCoord.xyz/shadowCoord.w*.5+.5;float shade=0.;
   // Soft rover-only cast shadow, combined with local tire contact shading.
   if(ground>.5&&sc.x>0.&&sc.x<1.&&sc.y>0.&&sc.y<1.&&sc.z>0.&&sc.z<1.){
@@ -149,6 +151,7 @@ class MarsRenderer {
       'contacts[0]',
       'routeBounds',
       'routeDetailBounds',
+      'indentBounds',
     ])
       this.uniforms[name] = gl.getUniformLocation(this.program, name);
     this.du = {
@@ -182,6 +185,8 @@ class MarsRenderer {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     let data = buildMappedGround();
     this.terrain = this.mesh(data);
+    this.indentBounds = GroundIndents.bounds();
+    this.indentMesh = this.mesh(buildIndentedGround(this.indentBounds));
     data = [];
     this.wheels = ARES4_RIG.wheels.map((w) => {
       let d = [],
@@ -869,14 +874,26 @@ class MarsRenderer {
     gl.uniform1i(this.uniforms.surfaceDetail, 1);
     gl.uniform4fv(this.uniforms.routeBounds, this.routeBounds || [1, 1, -1, -1]);
     gl.uniform4fv(this.uniforms.routeDetailBounds, this.routeDetailBounds || [1, 1, -1, -1]);
+    // Hide the local detail with the fine terrain when viewing the crater from afar.
+    const detail = this.routeDetailBounds,
+      local = this.indentBounds;
+    const showIndents =
+      !this.routeMesh ||
+      (detail &&
+        detail[0] < local[0] &&
+        detail[1] < local[1] &&
+        detail[2] > local[2] &&
+        detail[3] > local[3]);
+    gl.uniform4fv(this.uniforms.indentBounds, showIndents ? local : [1, 1, -1, -1]);
     this.draw(this.terrain, identity, false, 2);
     if (this.routeMesh) this.draw(this.routeMesh, identity, false, 3);
     if (this.routeDetailMesh) {
       gl.enable(gl.POLYGON_OFFSET_FILL);
       gl.polygonOffset(-1, -1);
-      this.draw(this.routeDetailMesh, identity, false, 1);
+      this.draw(this.routeDetailMesh, identity, false, 4);
       gl.disable(gl.POLYGON_OFFSET_FILL);
     }
+    if (showIndents) this.draw(this.indentMesh, identity, false, 5);
     this.draw(this.rocks, identity);
     if (this.trackMesh.count) this.draw(this.trackMesh, identity, false, 1);
     if (!firstPerson || freeFlight || this.eva) {
@@ -1112,6 +1129,54 @@ function coarseRouteHeight(grid, x, y) {
     c = grid.heights[i + grid.xs.length + 1],
     d = grid.heights[i + grid.xs.length];
   return u >= v ? a + (b - a) * u + (c - b) * v : a + (c - d) * u + (d - a) * v;
+}
+function buildIndentedGround(bounds) {
+  const step = Gale.unitsPerMeter;
+  const count = Math.round((bounds[2] - bounds[0]) / step),
+    width = count + 1;
+  const heights = new Float64Array(width * width);
+  const vertices = new Float32Array(width * width * 9);
+  for (let y = 0; y <= count; y++)
+    for (let x = 0; x <= count; x++)
+      heights[y * width + x] = Gale.height(bounds[0] + x * step, bounds[1] + y * step);
+  for (let y = 0; y <= count; y++)
+    for (let x = 0; x <= count; x++) {
+      const px = bounds[0] + x * step,
+        py = bounds[1] + y * step;
+      const left = Math.max(0, x - 1),
+        right = Math.min(count, x + 1);
+      const top = Math.max(0, y - 1),
+        bottom = Math.min(count, y + 1);
+      const nx = (heights[y * width + right] - heights[y * width + left]) / ((right - left) * step);
+      const ny = (heights[bottom * width + x] - heights[top * width + x]) / ((bottom - top) * step);
+      const shade = 1 + (GroundIndents.offset(px, py) / step) * 0.18;
+      vertices.set(
+        [
+          px,
+          py,
+          heights[y * width + x],
+          ...unit([-nx, -ny, 1]),
+          0.64 * shade,
+          0.4 * shade,
+          0.29 * shade,
+        ],
+        (y * width + x) * 9,
+      );
+    }
+  const data = new Float32Array(count * count * 54);
+  let offset = 0;
+  for (let y = 0; y < count; y++)
+    for (let x = 0; x < count; x++) {
+      const a = y * width + x,
+        b = a + 1,
+        c = a + width + 1,
+        d = a + width;
+      for (const i of [a, b, c, a, c, d]) {
+        data.set(vertices.subarray(i * 9, i * 9 + 9), offset);
+        offset += 9;
+      }
+    }
+  return data;
 }
 function buildRouteGround(grid, patch = null) {
   const xs = patch

@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
-import { Laboratory } from './laboratory.js';
+import { Rocketship } from './rocketship.js';
 
 // Share the terrain depth buffer; floating origin matches the native renderer.
 export class AstronautView {
@@ -17,7 +17,7 @@ export class AstronautView {
     this.scene.add(sun);
     this.root = new THREE.Group();
     this.scene.add(this.root);
-    this.laboratory = new Laboratory(this.scene);
+    this.rocketship = new Rocketship(this.scene);
     this.ready = new GLTFLoader()
       .loadAsync('astronaut.glb')
       .then((gltf) => {
@@ -60,7 +60,7 @@ export class AstronautView {
       });
   }
   draw(eva, eye, vp, dt, firstPerson) {
-    if (!this.loaded && !this.laboratory.loaded) return;
+    if (!this.loaded && !this.rocketship.loaded) return;
     this.root.visible = !!(this.loaded && eva && !firstPerson);
     if (this.loaded && eva) {
       const state = eva.state || 'Idle';
@@ -94,7 +94,7 @@ export class AstronautView {
       this.root.position.set(eva.x - eye[0], eva.y - eye[1], eva.z - eye[2]);
       this.root.rotation.z = eva.a;
     }
-    this.laboratory.update(eye, dt);
+    this.rocketship.update(eye, dt);
     this.camera.projectionMatrix.fromArray(vp);
     this.camera.projectionMatrixInverse.copy(this.camera.projectionMatrix).invert();
     this.renderer.resetState();
