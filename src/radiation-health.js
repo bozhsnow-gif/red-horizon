@@ -6,6 +6,7 @@ const RadiationHealth = {
   baselineMSvPerEarthDay: 0.67,
   earthDaysPerSol: 88775.244 / 86400,
   healthPointsPerMSv: 0.5,
+  shelterExposureFactor: 0.2, // Illustrative; not measured shielding.
   roverExposureFactor: 0.5, // Fictional shielding for play, not measured rover protection.
   doseMSv: 0,
   health: 100,
@@ -27,18 +28,18 @@ const RadiationHealth = {
     this.health = 100;
     this.lastKey = null;
   },
-  rateAt(seconds, outside) {
+  rateAt(seconds, outside, sheltered = false) {
     const sol = RadiationMonitor.startSol + Math.max(0, seconds) / RadiationMonitor.secondsPerSol;
     const plastic = RadiationMonitor.sample(sol)?.[0];
     return {
       rate:
         this.baselineMSvPerEarthDay *
         (plastic == null ? 1 : plastic / this.chartMean) *
-        (outside ? 1 : this.roverExposureFactor),
+        (sheltered ? this.shelterExposureFactor : outside ? 1 : this.roverExposureFactor),
       baseline: plastic == null,
     };
   },
-  advance(seconds, startSeconds, outside) {
+  advance(seconds, startSeconds, outside, sheltered = false) {
     if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(startSeconds)) return;
     const start =
         RadiationMonitor.startSol + Math.max(0, startSeconds) / RadiationMonitor.secondsPerSol,
@@ -63,35 +64,37 @@ const RadiationHealth = {
       weightedSols *
       this.earthDaysPerSol *
       this.baselineMSvPerEarthDay *
-      (outside ? 1 : this.roverExposureFactor);
+      (sheltered ? this.shelterExposureFactor : outside ? 1 : this.roverExposureFactor);
     this.health = Math.max(0, Math.min(100, 100 - this.doseMSv * this.healthPointsPerMSv));
   },
-  update(visible, seconds, outside) {
+  update(visible, seconds, outside, gameHealth = this.health, sheltered = false) {
     const panel = document.querySelector('#health-panel');
     panel.hidden = !visible;
     if (!visible) return;
-    const key = `${Math.floor(seconds * 4)}:${outside}:${this.health.toFixed(1)}`;
+    const key = `${Math.floor(seconds * 4)}:${outside}:${sheltered}:${gameHealth.toFixed(1)}:${this.doseMSv.toFixed(3)}`;
     if (this.lastKey === key) return;
     this.lastKey = key;
-    const reading = this.rateAt(seconds, outside),
-      level = this.health <= 30 ? 'critical' : this.health <= 70 ? 'caution' : 'normal';
-    panel.dataset.level = level;
-    document.querySelector('#health-value').textContent = this.health.toFixed(1) + '%';
+    const reading = this.rateAt(seconds, outside, sheltered);
+    const level = GameplayHealth.level(gameHealth);
+    panel.dataset.level = level === 'danger' ? 'critical' : level;
+    document.querySelector('#health-value').textContent = gameHealth.toFixed(1) + '%';
     const bar = document.querySelector('#health-bar');
-    bar.setAttribute('aria-valuenow', this.health.toFixed(1));
-    bar.setAttribute('aria-valuetext', this.health.toFixed(1) + ' percent health');
-    document.querySelector('#health-fill').style.width = this.health + '%';
+    bar.setAttribute('aria-valuenow', gameHealth.toFixed(1));
+    bar.setAttribute('aria-valuetext', gameHealth.toFixed(1) + ' percent simulated health');
+    document.querySelector('#health-fill').style.width = gameHealth + '%';
     document.querySelector('#health-dose').textContent = this.doseMSv.toFixed(2) + ' mSv';
     document.querySelector('#health-rate').textContent = reading.rate.toFixed(2) + ' mSv/day';
     document.querySelector('#health-exposure').textContent =
-      (outside ? 'EVA EXPOSURE' : 'ROVER SHIELDING') + (reading.baseline ? ' · BASELINE' : '');
-    document.querySelector('#health-status').textContent =
-      this.health === 0
-        ? 'DEPLETED'
-        : level === 'critical'
-          ? 'CRITICAL'
+      (sheltered ? 'SHELTER · RECOVERING' : outside ? 'EVA EXPOSURE' : 'ROVER SHIELDING') +
+      (reading.baseline ? ' · BASELINE' : '');
+    document.querySelector('#health-status').textContent = sheltered
+      ? 'SHELTER'
+      : level === 'critical'
+        ? 'CRITICAL · SEEK SHELTER'
+        : level === 'danger'
+          ? 'DANGER · SEEK SHELTER'
           : level === 'caution'
-            ? 'LOW HEALTH'
+            ? 'CAUTION'
             : 'STABLE';
   },
 };

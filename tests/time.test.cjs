@@ -20,3 +20,16 @@ test('Mars clock displays selected time and illustrative day and night', async (
   game.evaluate('marsTimeMinutes = 1439.9; running = true; tick(1020)');
   assert(game.evaluate('marsTimeMinutes') < 1440);
 });
+
+test('Mars clock advances one game minute per second, including at a low frame rate', () => {
+  const game = createGame();
+  game.evaluate('running=true; last=1000; tick(61000)');
+  assert.equal(game.evaluate('marsTimeMinutes'), 780);
+  game.evaluate('last=61000; tick(1441000)');
+  assert.equal(game.evaluate('marsTimeMinutes'), 720);
+  assert.equal(game.evaluate('elapsed'), 1440);
+  game.evaluate('updateUI()');
+  assert.equal(game.element('#sol').textContent, '002');
+  game.evaluate('running=false; last=1441000; tick(1501000)');
+  assert.equal(game.evaluate('marsTimeMinutes'), 720);
+});
