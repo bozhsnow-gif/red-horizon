@@ -1,0 +1,1 @@
+﻿const fs=require('fs');let p='verify-gpu.cjs',s=fs.readFileSync(p,'utf8');s=s.replace('Math.max(a[1],b[1])<=3400,onY','Math.max(a[1],b[1])<=6040,onY').replace('[-1000,3400].includes(a[1])','[-1000,6040].includes(a[1])').replace('seams.size!==800','seams.size!==1040').replace('all 800 mountain','all 1040 mountain');fs.writeFileSync(p,s);

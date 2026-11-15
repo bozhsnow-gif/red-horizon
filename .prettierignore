@@ -1,0 +1,10 @@
+node_modules/
+dist/
+history/
+assets/
+artifacts/
+src/ares4-mesh.js
+src/ares4-mesh.json
+src/ares4-mesh.js.previous
+src/gale-topography.js
+package-lock.json

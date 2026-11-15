@@ -1,0 +1,104 @@
+.mission-intro {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: #b78a60 url('intro-background.png') center/cover no-repeat;
+  color: #fff0dc;
+}
+.mission-intro::backdrop {
+  background: #b78a60;
+}
+.mission-intro[open] {
+  display: grid;
+  place-items: center;
+}
+.intro-film {
+  width: min(100vw, 216.410256vh);
+  width: min(100vw, 216.410256dvh);
+  aspect-ratio: 2532/1170;
+}
+/* The supplied phone recording embeds 226px black pillars on each side.
+   Reveal the landscape there without cropping or stretching the 2080px scene. */
+.mission-intro video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+  clip-path: inset(0 8.93%);
+}
+.intro-heading {
+  position: absolute;
+  top: 22px;
+  left: 24px;
+  margin: 0;
+  padding: 9px 12px;
+  background: #30261bc9;
+  border: 1px solid #ead0aa66;
+  font:
+    11px 'DM Mono',
+    monospace;
+  letter-spacing: 0.12em;
+  pointer-events: none;
+}
+.intro-actions {
+  position: absolute;
+  right: 24px;
+  bottom: 60px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  max-width: calc(100% - 48px);
+}
+.intro-actions p {
+  margin: 0;
+  padding: 8px;
+  background: #30261bc9;
+  font-size: 13px;
+}
+.intro-actions p:empty {
+  display: none;
+}
+.intro-actions button {
+  padding: 12px 18px;
+  background: #30261be8;
+  color: #fff0dc;
+  border: 1px solid #ead0aa;
+  font:
+    12px 'DM Mono',
+    monospace;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.intro-actions button:hover {
+  background: #604831;
+}
+.intro-actions button:focus-visible {
+  outline: 3px solid #fff0dc;
+  outline-offset: 3px;
+}
+.intro-actions [hidden] {
+  display: none;
+}
+@media (max-width: 560px) {
+  .intro-heading {
+    top: 12px;
+    left: 12px;
+    font-size: 10px;
+  }
+  .intro-actions {
+    right: 12px;
+    bottom: 50px;
+    max-width: calc(100% - 24px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}

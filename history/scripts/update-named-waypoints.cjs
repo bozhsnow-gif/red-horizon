@@ -1,0 +1,10 @@
+'use strict';
+const fs=require('node:fs');let html=fs.readFileSync('dist/index.html','utf8');
+html=html.replace('<div class="label">Waypoint route</div>','<div class="label">Curiosity’s named waypoints</div>');
+html=html.replace('Reach each numbered bend within 12 m.','The numbered stops use Curiosity’s place names; small dots guide you through the intervening bends. Reach each driving checkpoint within 12 m.');
+html=html.replace('<p id="waypoint-details" class="small"></p>','<p id="waypoint-details" class="small"></p><a id="waypoint-source" class="small" target="_blank" rel="noopener" hidden></a><p class="small">Names checked against NASA references; marker positions are estimated from your screenshots. Click a named marker or list entry for details.</p>');
+html=html.replace('aria-label="Route waypoints"','aria-label="Named Curiosity waypoints in travel order"');
+html=html.replace('</style>','.route-hud{max-width:calc(100% - 24px);overflow:hidden;text-overflow:ellipsis}#waypoint-source{display:inline-block;margin-bottom:8px}#waypoint-source[hidden]{display:none}</style>');
+fs.writeFileSync('dist/index.html',html);
+let test=fs.readFileSync('verify-traverse.cjs','utf8').replaceAll(' vicinity','');
+fs.writeFileSync('verify-traverse.cjs',test);

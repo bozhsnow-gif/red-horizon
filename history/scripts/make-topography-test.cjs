@@ -1,0 +1,1 @@
+﻿const fs=require('fs');let old=fs.readFileSync('verify-gpu.cjs','utf8'),prefix=old.slice(0,old.indexOf('const before='));prefix=prefix.replace("fs.readFileSync('dist/gale.js','utf8')", "fs.readFileSync('dist/gale-topography.js','utf8')+'\\n'+fs.readFileSync('dist/gale.js','utf8')");fs.writeFileSync('verify-topography.cjs',prefix);

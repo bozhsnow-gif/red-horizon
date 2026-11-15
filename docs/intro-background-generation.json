@@ -1,0 +1,9 @@
+{
+  "tool": "Built-in image_gen",
+  "asset": "src/intro-background.png",
+  "prompt": "Use case: photorealistic-natural. Asset type: wide cinematic background for a Mars rover game's intro video. Generate a seamless-feeling, full-bleed 16:9 Martian landscape: dusty ochre sky in the upper half, distant eroded crater ridges near the middle, and a gently undulating reddish-tan rocky plain across the bottom. Warm muted amber, pale sandy brown, atmospheric dust haze, low contrast distant hills, realistic dry regolith and scattered small stones. Match the visual feel of a photorealistic rover sky-crane landing animation. Quiet open central composition; the intro video will be placed over the center and this image fills the remaining screen area. Landscape reaches every edge: no black bars, borders, dark corners, text, logos, vehicles, spacecraft, people, plants, water, or UI. Natural softly directional sunlight. This is just the background landscape, no video frame or device mockup.",
+  "sourceVideo": "assets/source/intro.mov",
+  "video": "src/intro.mp4",
+  "conversion": "Windows Media Foundation, H.264 MP4, original display rotation preserved",
+  "display": "The original 226px black pillars on each side are clipped to reveal the generated background."
+}

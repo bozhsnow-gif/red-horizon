@@ -1,0 +1,10 @@
+﻿const fs=require('fs');let p='dist/index.html',s=fs.readFileSync(p,'utf8');s=s.replace('firstPerson=false,orbitYaw=0','firstPerson=false,birdsEye=false,orbitYaw=0');s=s.replace('performance.now(),orbitZoom)','performance.now(),orbitZoom,birdsEye)');
+const old="if(e.code==='Digit1'&&e.shiftKey&&!e.repeat){e.preventDefault();firstPerson=!firstPerson;message(firstPerson?'FIRST-PERSON CAMERA':'ORBIT CAMERA');return}";
+if(!s.includes(old))throw Error('Camera handler missing');
+s=s.replace(old,"if(e.code==='Digit2'&&e.shiftKey&&!e.repeat){e.preventDefault();birdsEye=!birdsEye;firstPerson=false;message(birdsEye?'BIRD’S-EYE CAMERA':'ORBIT CAMERA');return}if(e.code==='Digit1'&&e.shiftKey&&!e.repeat){e.preventDefault();firstPerson=!firstPerson;birdsEye=false;message(firstPerson?'FIRST-PERSON CAMERA':'ORBIT CAMERA');return}");
+s=s.replace('<div class="controlrow"><span>Steer rover</span>','<div class="controlrow"><span>Bird’s-eye view</span><div class="keys"><span class="key">SHIFT</span><span class="key">2</span></div></div><div class="controlrow"><span>Steer rover</span>');fs.writeFileSync(p,s);
+p='dist/renderer.js';s=fs.readFileSync(p,'utf8').replace('orbitPitch,time,zoom=185){','orbitPitch,time,zoom=185,birdsEye=false){');
+s=s.replace('  if(firstPerson){eye=', '  if(birdsEye){target=[rover.x,rover.y,base];eye=[rover.x,rover.y,base+this.zoom*2.8]}\n  else if(firstPerson){eye=');
+s=s.replace('lookAt(eye,target)),identity=', 'lookAt(eye,target,birdsEye?[Math.sin(this.yaw),-Math.cos(this.yaw),0]:[0,0,1])),identity=');
+s=s.replace('function lookAt(eye,target){let z=unit(sub(eye,target)),x=unit(cross([0,0,1],z))','function lookAt(eye,target,up=[0,0,1]){let z=unit(sub(eye,target)),x=unit(cross(up,z))');
+fs.writeFileSync(p,s);new Function(s);console.log('Bird’s-eye camera added with independent, non-degenerate top-down orientation and pinch zoom.');

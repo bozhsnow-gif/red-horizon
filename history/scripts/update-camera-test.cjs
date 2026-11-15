@@ -1,0 +1,1 @@
+﻿const fs=require('fs');let p='verify-gpu.cjs',s=fs.readFileSync(p,'utf8');s=s.replace('window:{addEventListener(){}}','window:{addEventListener:(n,f)=>listeners["window:"+n]=f}');fs.writeFileSync(p,s);

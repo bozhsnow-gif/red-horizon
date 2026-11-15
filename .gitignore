@@ -1,0 +1,14 @@
+node_modules/
+dist/
+artifacts/
+.openai/
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+*-profile/
+*.blend1
+*.blend2

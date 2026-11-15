@@ -1,0 +1,414 @@
+﻿<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Red Horizon — Mars Rover Mission</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="intro.css" />
+    <link rel="preload" as="image" href="intro-background.png" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="top">
+        <div class="brand">
+          <div class="mark">✳</div>
+          <div>
+            <div class="eyebrow">Mars exploration program</div>
+            <strong>RED HORIZON</strong>
+          </div>
+        </div>
+        <div class="topright">
+          <span class="tiny">Gale crater · Mars</span><span class="tiny online">Rover online</span>
+        </div>
+      </header>
+      <div class="shell">
+        <section class="view" aria-label="Rover exploration game">
+          <canvas id="game" tabindex="0" aria-label="Rover driving view"></canvas>
+          <div class="viewtop">
+            <div class="chip"><b>●</b> LIVE FEED &nbsp; / &nbsp; ROVER 01</div>
+            <div class="cross">
+              <span id="fps">GPU RENDERER</span><br />◈ &nbsp;
+              <span id="terrain-badge">MARS / ESTIMATED TERRAIN</span>
+            </div>
+          </div>
+          <div class="viewbottom">
+            <div class="location">CURRENT LOCATION<strong>Gale Crater</strong></div>
+            <div class="location">SOL <strong id="sol">001</strong></div>
+          </div>
+          <div
+            class="compass"
+            role="img"
+            aria-label="Compass: north, south, east and west relative to the current camera"
+          >
+            <div class="compass-dial">
+              <div class="compass-rose" id="compass-rose">
+                <span class="compass-label compass-n">N</span
+                ><span class="compass-label compass-s">S</span
+                ><span class="compass-label compass-e">E</span
+                ><span class="compass-label compass-w">W</span>
+              </div>
+              <span class="compass-pointer"></span>
+            </div>
+            <span class="compass-heading" id="compass-heading">000°</span>
+          </div>
+          <div class="coordinates">
+            <span id="coordinate-owner">ROVER · APPROX. COORDS</span>
+            <div><span class="coordinate-axis">LAT</span> <span id="geo-latitude"></span></div>
+            <div><span class="coordinate-axis">LON</span> <span id="geo-longitude"></span></div>
+          </div>
+          <div id="route-hud" class="route-hud" role="status"></div>
+          <div class="toast" id="toast"></div>
+          <div class="touch">
+            <button data-key="ArrowLeft" aria-label="Turn left">◀</button>
+            <div class="stack">
+              <button data-key="ArrowUp" aria-label="Drive forward">▲</button
+              ><button data-key="ArrowDown" aria-label="Reverse">▼</button>
+            </div>
+            <button data-key="ArrowRight" aria-label="Turn right">▶</button>
+          </div>
+          <div class="start" id="start">
+            <div class="startbox">
+              <div class="eyebrow">A mission millions of miles away</div>
+              <h2>Leave your mark<br />on Mars.</h2>
+              <p>
+                Explore Gale at full physical scale. Load NASA MOLA terrain below to replace the
+                estimated map. Use instant travel for long distances or Shift + 2 to view the whole
+                crater.
+              </p>
+              <button id="begin">BEGIN EXPLORING &nbsp; ↗</button>
+            </div>
+          </div>
+        </section>
+        <aside class="side">
+          <section class="panel mission">
+            <div class="panelhead"><span class="label">01 / Mission brief</span><span>✳</span></div>
+            <h1>Explore the<br />red planet.</h1>
+            <p>
+              Explore Gale through Curiosity’s discoveries. Stop at each beacon to read about the
+              geology.
+            </p>
+            <div class="row">
+              <span class="small">SAMPLES COLLECTED</span
+              ><span class="big" id="count">00 / 05</span>
+            </div>
+            <div class="progressbar"><i id="progress"></i></div>
+            <div class="row">
+              <span class="small" id="missionstatus">SURVEY IN PROGRESS</span
+              ><span class="small">↗</span>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panelhead">
+              <span class="label">02 / Terrain &amp; coordinates</span><span>⌖</span>
+            </div>
+            <button class="reset" id="route-map-mode" style="margin-bottom: 10px">
+              MAP: NEARBY
+            </button>
+            <div class="mapwrap"><canvas id="map" width="260" height="235"></canvas></div>
+            <div class="mapfoot">
+              <div class="legend"><span class="small">Blue: rover · Gold: next</span></div>
+              <span class="small">N ↑</span>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panelhead"><span class="label">03 / Telemetry</span><span>⌁</span></div>
+            <div class="telemetry">
+              <div>
+                <div class="statlabel">Ground speed</div>
+                <div class="value"><span id="speed">0.0</span> <small>M/S</small></div>
+              </div>
+              <div>
+                <div class="statlabel">Distance</div>
+                <div class="value"><span id="distance">0</span> <small>M</small></div>
+              </div>
+              <div>
+                <div class="statlabel">Heading</div>
+                <div class="value"><span id="heading">000</span><small>°</small></div>
+              </div>
+              <div>
+                <div class="statlabel">Traction model</div>
+                <div class="value" id="traction">—</div>
+              </div>
+            </div>
+          </section>
+          <section class="panel controls">
+            <div class="panelhead">
+              <span class="label">04 / Rover controls</span
+              ><button class="reset" id="reset">RESET ↺</button>
+            </div>
+            <div class="controlrow">
+              <span>Driving mode</span
+              ><button class="reset" id="drive-mode" aria-pressed="false">EXPLORATION</button>
+            </div>
+            <p class="small" id="mode-note">
+              Curiosity speed limit: 0.04 m/s · simplified traction
+            </p>
+            <div class="controlrow">
+              <span>Drive & reverse</span>
+              <div class="keys">
+                <span class="key">W</span><span class="key">S</span><span class="key">↑</span
+                ><span class="key">↓</span>
+              </div>
+            </div>
+            <div class="controlrow">
+              <span>Look around</span><span class="small">DRAG / TWO FINGERS</span>
+            </div>
+            <div class="controlrow">
+              <span>Zoom · pinch in / spread out</span>
+              <div class="keys">
+                <button class="reset" id="zoom-in" aria-label="Zoom in">+</button
+                ><button class="reset" id="zoom-out" aria-label="Zoom out">−</button>
+              </div>
+            </div>
+            <div class="controlrow">
+              <span>Change camera</span>
+              <div class="keys"><span class="key">SHIFT</span><span class="key">1</span></div>
+            </div>
+            <div class="controlrow">
+              <span>Double-tap Space</span
+              ><button class="reset" id="flight-toggle">LEAVE ROVER</button>
+            </div>
+            <div class="controlrow">
+              <span>Free flight</span><span class="small">WASD · E ↑ / Q ↓</span>
+            </div>
+            <div class="controlrow">
+              <span>Crater overview · relief</span>
+              <div class="keys"><span class="key">SHIFT</span><span class="key">2</span></div>
+            </div>
+            <div class="controlrow">
+              <span>Steer rover</span>
+              <div class="keys">
+                <span class="key">A</span><span class="key">D</span><span class="key">←</span
+                ><span class="key">→</span>
+              </div>
+            </div>
+          </section>
+          <section class="panel mission">
+            <div class="label">Landing panorama reference</div>
+            <p>4.6° S · 137.4° E</p>
+            <button class="reset" id="landing-view">LANDING PHOTO VIEW</button>
+            <details id="landing-photo">
+              <summary style="cursor: pointer; margin-top: 12px">
+                Compare your reference photo
+              </summary>
+              <a href="landing-reference.jpg" target="_blank" rel="noopener"
+                ><img
+                  src="landing-reference.jpg"
+                  alt="Supplied Curiosity landing panorama: brown gravel plain, small stones and distant ridges; black areas are missing imagery"
+                  style="width: 100%; height: auto; margin-top: 10px"
+              /></a>
+              <p>
+                Appearance reference: muted brown dust, dark embedded stones and pale dusty sky.
+                Small rocks are illustrative. The original panorama has missing image areas and does
+                not provide measured 3D geometry or a calibrated heading for this view.
+              </p>
+              <p>
+                Your spawn remains at the requested rounded coordinates. Curiosity’s reconstructed
+                landing position is approximately 4.5895° S, 137.4417° E, about 2.5 km away. Camera
+                height here is an illustrative 2 m; horizon geometry still comes from the active
+                terrain dataset.
+              </p>
+              <a
+                href="https://science.nasa.gov/photojournal/gale-crater-vista-in-glorious-color/"
+                target="_blank"
+                rel="noopener"
+                >NASA: early landing panorama and processing</a
+              >
+              <p class="small">Image reference: NASA/JPL-Caltech/MSSS; supplied by you.</p>
+            </details>
+          </section>
+          <section class="panel mission">
+            <div class="label">Travel across Gale</div>
+            <p>
+              <span id="terrain-extent">Full-scale terrain; source pending.</span> Jump between
+              locations to explore without a long drive.
+            </p>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap">
+              <button class="reset" id="travel-landing">LANDING AREA</button
+              ><button class="reset" id="travel-summit">MOUNTAIN</button
+              ><button class="reset" id="travel-rim">SOUTHERN RIM AREA</button>
+            </div>
+          </section>
+          <section class="panel mission">
+            <div class="label">Curiosity’s named waypoints</div>
+            <p>
+              Follow Curiosity’s visible route through Bradbury Landing, Yellowknife Bay, Kimberley,
+              Pahrump Hills and Ogunquit Beach. The numbered stops use Curiosity’s place names;
+              small dots guide you through the intervening bends. Reach each driving checkpoint
+              within 12 m. Green means reached; gold is next. The blue dashed approach connects your
+              chosen spawn to Bradbury and is not part of Curiosity’s traverse.
+            </p>
+            <div class="big" id="climb-status"></div>
+            <p id="climb-elevation"></p>
+            <p id="route-guidance"></p>
+            <p id="route-progress" aria-live="polite"></p>
+            <p id="waypoint-details" class="small"></p>
+            <a id="waypoint-source" class="small" target="_blank" rel="noopener" hidden></a>
+            <p class="small">
+              Names checked against NASA references; marker positions are estimated from your
+              screenshots. Click a named marker or list entry for details.
+            </p>
+            <ol id="waypoint-list" aria-label="Named Curiosity waypoints in travel order"></ol>
+            <details>
+              <summary style="cursor: pointer; margin-top: 12px">
+                Route sources &amp; remaining gaps
+              </summary>
+              <p>
+                Manually traced from your NASA map screenshots. The first two images overlap near
+                Kimberley; their bends and 2 km scale bar set the route shape and scale. North-up
+                orientation is assumed. Bradbury is anchored at 4.5895° S, 137.4417° E. All other
+                route coordinates and named stop locations are estimates, even with measured terrain
+                loaded.
+              </p>
+              <p>
+                The followable trace ends before the overlapping tracks south of Ogunquit Beach,
+                where a still image does not establish their travel order. Gediz Vallis is saved
+                below as a later, unconnected reference: the missing section and its absolute
+                placement have not been invented. This is not a complete mission traverse or a live
+                rover position.
+              </p>
+              <p>
+                The mini-map uses your aligned screenshots where available; this does not replace
+                the game’s 3D elevation data.
+              </p>
+              <a href="traverse-landing.png" target="_blank" rel="noopener"
+                >Landing → Kimberley screenshot</a
+              ><br /><a href="traverse-kimberley.png" target="_blank" rel="noopener"
+                >Kimberley → Ogunquit Beach screenshot</a
+              ><br /><a href="traverse-gediz.png" target="_blank" rel="noopener"
+                >Gediz Vallis screenshot — unconnected</a
+              >
+              <p class="small">
+                Map imagery: NASA/JPL-Caltech; screenshots supplied by you. Readout coordinates at
+                the bottom of the screenshots were not treated as landmark coordinates.
+              </p>
+              <a
+                href="https://www.jpl.nasa.gov/images/pia18607-curiosity-mars-rovers-route-from-landing-to-pahrump-hills/"
+                target="_blank"
+                rel="noopener"
+                >NASA: landing-to-Pahrump route chronology</a
+              >
+            </details>
+          </section>
+          <section class="panel mission">
+            <div class="label">Curiosity field notes</div>
+            <p id="surface">Gravel plain</p>
+            <h2 id="science-title" style="font-size: 18px">Explore five geology stops</h2>
+            <p id="science-text">
+              The ARES rover remains your vehicle. The landscape combines features studied by
+              Curiosity, whose real rover uses six wheels.
+            </p>
+            <details open>
+              <summary style="cursor: pointer; font-size: 12px">
+                NASA terrain &amp; accuracy
+              </summary>
+              <p id="terrain-source-status" role="status" style="margin-top: 12px"></p>
+              <p>
+                To replace the estimated landscape, download both original NASA files, then select
+                them together. The game reads only the Gale region and stores it in this browser.
+              </p>
+              <p>
+                <a
+                  href="https://pds-geosciences.wustl.edu/mgs/urn-nasa-pds-mgs_mola_topography_derived/meg128/megt00n090hb.img"
+                  target="_blank"
+                  rel="noopener"
+                  >Download MOLA terrain (.img, 130 MB)</a
+                ><br /><a
+                  href="https://pds-geosciences.wustl.edu/mgs/urn-nasa-pds-mgs_mola_topography_derived/meg128/megt00n090hb.lbl"
+                  target="_blank"
+                  rel="noopener"
+                  >Download matching label (.lbl)</a
+                >
+              </p>
+              <label for="nasa-files" class="small">Load the NASA .img and .lbl files</label
+              ><input
+                id="nasa-files"
+                type="file"
+                accept=".img,.lbl"
+                multiple
+                style="width: 100%; margin: 10px 0; font-size: 11px"
+              />
+              <p id="nasa-import-status" role="status" aria-live="polite"></p>
+              <p id="terrain-provenance"></p>
+              <p>
+                Horizontal and vertical scale: 1:1, with no height exaggeration. The flat local map
+                has small projection distortion and omits planetary curvature. MOLA’s approximately
+                460 m grid includes interpolated cells; it cannot resolve individual rocks, dunes or
+                wheel-scale hazards. Enhanced overview shading is for readability.
+              </p>
+              <p>
+                ARES is a fictional four-wheel rover, not Curiosity. Rocks, ground colors, science
+                stops, traction and suspension are illustrative. Route waypoints are
+                screenshot-derived estimates; the spawn approach is fictional. A formation cannot be
+                identified from elevation alone. Simulation speed is capped at 0.04 m/s; exploration
+                mode is accelerated. Gravity: 3.71 m/s². No live Mars weather is simulated.
+              </p>
+              <p>
+                <a
+                  href="https://pds-geosciences.wustl.edu/missions/mgs/megdr.html"
+                  target="_blank"
+                  rel="noopener"
+                  >NASA PDS: MOLA data and reference surface</a
+                ><br /><a
+                  href="https://ntrs.nasa.gov/api/citations/20130010129/downloads/20130010129.pdf"
+                  target="_blank"
+                  rel="noopener"
+                  >NASA: Bradbury Landing coordinates</a
+                ><br /><a
+                  href="https://science.nasa.gov/resource/curiosity-cradled-by-gale-crater/"
+                  target="_blank"
+                  rel="noopener"
+                  >NASA: Gale Crater and Mount Sharp</a
+                ><br /><a
+                  href="https://www.jpl.nasa.gov/videos/building-curiosity-rover-rocks-rocker-bogie/"
+                  target="_blank"
+                  rel="noopener"
+                  >JPL: rover speed</a
+                ><br /><a
+                  href="https://science.nasa.gov/blog/recap-of-the-bagnold-dune-investigation/"
+                  target="_blank"
+                  rel="noopener"
+                  >NASA: Curiosity geology</a
+                >
+              </p>
+            </details>
+          </section>
+        </aside>
+      </div>
+      <footer class="footer">
+        <span>MISSION CONTROL &nbsp; / &nbsp; RED HORIZON</span
+        ><span>AN INTERACTIVE MARTIAN EXPERIENCE &nbsp; ✳</span>
+      </footer>
+    </main>
+    <dialog class="mission-intro" id="mission-intro" aria-label="Mars landing intro">
+      <div class="intro-film">
+        <video
+          id="intro-video"
+          src="intro.mp4"
+          preload="metadata"
+          playsinline
+          aria-label="Mars rover landing clip"
+        ></video>
+      </div>
+      <p class="intro-heading">ARES / ARRIVAL ON MARS</p>
+      <div class="intro-actions">
+        <p id="intro-status" role="status" aria-live="polite"></p>
+        <button id="intro-play" type="button" hidden>PLAY INTRO</button
+        ><button id="intro-skip" type="button">SKIP INTRO &rarr;</button>
+      </div>
+    </dialog>
+    <script src="intro.js"></script>
+    <script src="ares4-mesh.js"></script>
+    <script src="gale-topography.js"></script>
+    <script src="mola-import.js"></script>
+    <script src="terrain-loader.js"></script>
+    <script src="gale.js"></script>
+    <script src="traverse-data.js"></script>
+    <script src="waypoints.js"></script>
+    <script src="landing-reference.js"></script>
+    <script src="renderer.js"></script>
+    <script src="nasa-ui.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
