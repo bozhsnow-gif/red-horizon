@@ -287,8 +287,12 @@
                 </div>
               </div>
               <div class="controlrow">
-                <span>Change camera</span>
+                <span>First-person / orbit</span>
                 <div class="keys"><span class="key">SHIFT</span><span class="key">1</span></div>
+              </div>
+              <div class="controlrow">
+                <span>Third-person camera</span>
+                <div class="keys"><span class="key">SHIFT</span><span class="key">3</span></div>
               </div>
               <div class="controlrow">
                 <span>Press F</span><button class="reset" id="flight-toggle">LEAVE ROVER</button>
@@ -626,6 +630,19 @@
       <p class="shield-disclaimer">
         Illustrative concept, not a prediction of dose or shielding effectiveness. Field strength,
         geometry, particle energy and shielding coverage all matter.
+      </p>
+      <p class="shield-disclaimer">
+        NASA-funded CREW HaT simulations found an additional 8–18% reduction in GCR equivalent
+        dose for the material-shielded cases studied. These spacecraft simulations do not predict
+        this habitat's protection on Mars. Inside the habitat, the game assumes a combined 35%
+        reduction for the toroid and material layer; this is illustrative, not a measured result.
+        The diagram switches do not change the game dose.
+        <a href="https://ntrs.nasa.gov/api/citations/20250002403/downloads/NIAC_2022_PhI_DOnghia_CREWHat.pdf" target="_blank" rel="noopener noreferrer">NASA research (table 6.2)</a>
+      </p>
+      <p class="shield-disclaimer">
+        The dose display is a gameplay estimate based on Curiosity's 2012–2013 Gale Crater
+        average, not a live measurement. Rover shielding and health effects are fictional.
+        <a href="https://www.nasa.gov/news-release/nasa-rover-results-include-first-age-measurement-on-mars-and-help-for-human-exploration/" target="_blank" rel="noopener noreferrer">NASA measurements</a>
       </p>
     </dialog>
     <dialog class="mission-intro" id="mission-intro" aria-label="Mars landing intro">

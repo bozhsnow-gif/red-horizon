@@ -7,6 +7,7 @@ const RadiationHealth = {
   earthDaysPerSol: 88775.244 / 86400,
   healthPointsPerMSv: 0.5,
   roverExposureFactor: 0.5, // Fictional shielding for play, not measured rover protection.
+  habitatExposureFactor: 0.65, // Illustrative combined shielding; not a validated Mars prediction.
   doseMSv: 0,
   health: 100,
   chartMean: (() => {
@@ -27,18 +28,18 @@ const RadiationHealth = {
     this.health = 100;
     this.lastKey = null;
   },
-  rateAt(seconds, outside) {
+  rateAt(seconds, outside, sheltered = false) {
     const sol = RadiationMonitor.startSol + Math.max(0, seconds) / RadiationMonitor.secondsPerSol;
     const plastic = RadiationMonitor.sample(sol)?.[0];
     return {
       rate:
         this.baselineMSvPerEarthDay *
         (plastic == null ? 1 : plastic / this.chartMean) *
-        (outside ? 1 : this.roverExposureFactor),
+        (sheltered ? this.habitatExposureFactor : outside ? 1 : this.roverExposureFactor),
       baseline: plastic == null,
     };
   },
-  advance(seconds, startSeconds, outside) {
+  advance(seconds, startSeconds, outside, sheltered = false) {
     if (!Number.isFinite(seconds) || seconds <= 0 || !Number.isFinite(startSeconds)) return;
     const start =
         RadiationMonitor.startSol + Math.max(0, startSeconds) / RadiationMonitor.secondsPerSol,
@@ -63,17 +64,17 @@ const RadiationHealth = {
       weightedSols *
       this.earthDaysPerSol *
       this.baselineMSvPerEarthDay *
-      (outside ? 1 : this.roverExposureFactor);
+      (sheltered ? this.habitatExposureFactor : outside ? 1 : this.roverExposureFactor);
     this.health = Math.max(0, Math.min(100, 100 - this.doseMSv * this.healthPointsPerMSv));
   },
-  update(visible, seconds, outside) {
+  update(visible, seconds, outside, sheltered = false) {
     const panel = document.querySelector('#health-panel');
     panel.hidden = !visible;
     if (!visible) return;
-    const key = `${Math.floor(seconds * 4)}:${outside}:${this.health.toFixed(1)}`;
+    const key = `${Math.floor(seconds * 4)}:${outside}:${sheltered}:${this.health.toFixed(1)}`;
     if (this.lastKey === key) return;
     this.lastKey = key;
-    const reading = this.rateAt(seconds, outside),
+    const reading = this.rateAt(seconds, outside, sheltered),
       level = this.health <= 30 ? 'critical' : this.health <= 70 ? 'caution' : 'normal';
     panel.dataset.level = level;
     document.querySelector('#health-value').textContent = this.health.toFixed(1) + '%';
@@ -84,7 +85,7 @@ const RadiationHealth = {
     document.querySelector('#health-dose').textContent = this.doseMSv.toFixed(2) + ' mSv';
     document.querySelector('#health-rate').textContent = reading.rate.toFixed(2) + ' mSv/day';
     document.querySelector('#health-exposure').textContent =
-      (outside ? 'EVA EXPOSURE' : 'ROVER SHIELDING') + (reading.baseline ? ' · BASELINE' : '');
+      (sheltered ? 'HABITAT · ESTIMATED SHIELDING' : outside ? 'EVA EXPOSURE' : 'ROVER SHIELDING') + (reading.baseline ? ' · BASELINE' : '');
     document.querySelector('#health-status').textContent =
       this.health === 0
         ? 'DEPLETED'

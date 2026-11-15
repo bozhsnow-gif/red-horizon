@@ -19,6 +19,8 @@ let graphics = null,
   climbIndex = 0;
 let rover, samples, rocks, dist, elapsed, collected;
 let astronaut = null;
+let habitatSheltered = false, habitatCandidateTime = 0;
+let pendingInteriorSpawn = true;
 let lastForwardTap = -Infinity;
 let rockSamples = 0;
 let marsTimeMinutes = 720;
@@ -101,6 +103,9 @@ function rand(n) {
   return x - Math.floor(x);
 }
 function init() {
+  habitatSheltered = false;
+  habitatCandidateTime = 0;
+  pendingInteriorSpawn = true;
   climbIndex = 0;
   WaypointRoute.selected = -1;
   WaypointRoute.mode = 'nearby';
@@ -135,6 +140,7 @@ function init() {
   elapsed = 0;
   RadiationHealth.reset();
   RadiationMonitor.lastKey = null;
+  RadiationMonitor.history = [];
   marsTimeMinutes = 720;
   windDisplayStates = null;
   windAnimationId++;
@@ -367,10 +373,40 @@ function terrain(x, y) {
   return Gale.height(x, y);
 }
 function render() {
-  RadiationHealth.update(running && !missionIntro.active, elapsed, !!astronaut);
+  if (pendingInteriorSpawn && running && !missionIntro.active && graphics?.astronautView?.loaded) {
+    const point = graphics.astronautView.rocketship?.interiorSpawn();
+    if (point) {
+      astronaut = {
+        ...point,
+        active: true,
+        a: 0,
+        v: 0,
+        vz: 0,
+        airborne: false,
+        sprinting: false,
+        state: 'Idle',
+        pickup: null,
+      };
+      pendingInteriorSpawn = false;
+      habitatSheltered = true;
+      habitatCandidateTime = 0;
+      firstPerson = true;
+      birdsEye = false;
+      freeFlight = false;
+      orbitYaw = 0;
+      orbitPitch = 0;
+      orbitZoom = 185;
+      graphics.referenceCamera = false;
+      document.querySelector('#flight-toggle').textContent = 'RETURN TO ROVER [F]';
+    }
+  }
+  graphics?.astronautView?.rocketship?.updateDoor?.(astronaut);
+  const sheltered = habitatSheltered;
+  RadiationHealth.update(running && !missionIntro.active, elapsed, !!astronaut, sheltered);
   RadiationMonitor.update(
     running && !!astronaut && firstPerson && !freeFlight && !birdsEye && !missionIntro.active,
     elapsed,
+    sheltered,
   );
   if (graphics) graphics.eva = astronaut;
   if (graphics)
@@ -409,7 +445,14 @@ function tick(t) {
   let dt = Math.max(0, Math.min((t - last) / 1000 || 0, 0.05));
   last = t;
   if (running) {
-    RadiationHealth.advance(dt, elapsed, !!astronaut);
+    const detectedHabitat = !!graphics?.astronautView?.rocketship?.containsAstronaut(astronaut);
+    if (!astronaut) { habitatSheltered = false; habitatCandidateTime = 0; }
+    else if (detectedHabitat === habitatSheltered) habitatCandidateTime = 0;
+    else if ((habitatCandidateTime += dt) >= 0.75) {
+      habitatSheltered = detectedHabitat;
+      habitatCandidateTime = 0;
+    }
+    RadiationHealth.advance(dt, elapsed, !!astronaut, habitatSheltered);
     elapsed += dt;
     marsTimeMinutes = (marsTimeMinutes + (dt * 1440) / 88775.244) % 1440;
     updateMarsTime();
@@ -480,7 +523,13 @@ function limitLookPitch(p) {
   return Math.max(freeFlight ? -1.45 : -0.55, Math.min(freeFlight ? 1.45 : 0.4, p));
 }
 function evaSurface(x, y) {
-  return graphics ? graphics.surface(x, y) : terrain(x, y);
+  const terrainZ = graphics ? graphics.surface(x, y) : terrain(x, y);
+  const floor = graphics?.astronautView?.rocketship?.floorHeight(
+    x,
+    y,
+    (astronaut?.z ?? terrainZ) + Gale.unitsPerMeter * 0.65,
+  );
+  return floor ?? terrainZ;
 }
 function toggleAstronaut() {
   if (!running || missionIntro.active) return;
@@ -599,9 +648,10 @@ function stepAstronaut(dt, input) {
   const stride = (actor.v * dt) / (magnitude || 1);
   const dx = (Math.sin(actor.a) * direction + Math.cos(actor.a) * sideways) * stride;
   const dy = (-Math.cos(actor.a) * direction + Math.sin(actor.a) * sideways) * stride;
-  actor.x = Math.max(0, Math.min(Gale.widthUnits, actor.x + dx));
-  actor.y = Math.max(0, Math.min(Gale.heightUnits, actor.y + dy));
-  dist += Math.hypot(dx, dy);
+  const moved = graphics?.astronautView?.rocketship?.moveAstronaut(actor, dx, dy) || {x: actor.x + dx, y: actor.y + dy};
+  dist += Math.hypot(moved.x - actor.x, moved.y - actor.y);
+  actor.x = Math.max(0, Math.min(Gale.widthUnits, moved.x));
+  actor.y = Math.max(0, Math.min(Gale.heightUnits, moved.y));
   const floor = evaSurface(actor.x, actor.y);
   if (actor.airborne) {
     actor.vz -= Gale.gravity * Gale.unitsPerMeter * dt;
@@ -611,6 +661,9 @@ function stepAstronaut(dt, input) {
       actor.vz = 0;
       actor.airborne = false;
     }
+  } else if (actor.z - floor > Gale.unitsPerMeter * 0.65) {
+    actor.airborne = true;
+    actor.vz = 0;
   } else actor.z = floor;
   actor.state = actor.airborne
     ? 'Jump'
@@ -868,6 +921,23 @@ window.addEventListener('keydown', (e) => {
     orbitZoom = birdsEye ? Gale.overviewZoom : 185;
     firstPerson = false;
     message(birdsEye ? 'BIRDS-EYE CAMERA' : 'ORBIT CAMERA');
+    return;
+  }
+  if (e.code === 'Digit3' && e.shiftKey && !e.repeat) {
+    e.preventDefault();
+    if (freeFlight) toggleFlight();
+    firstPerson = false;
+    birdsEye = false;
+    orbitZoom = astronaut ? 130 : 185;
+    orbitYaw = 0;
+    orbitPitch = 0;
+    if (graphics) {
+      graphics.referenceCamera = false;
+      graphics.zoom = orbitZoom;
+      graphics.yaw = 0;
+      graphics.pitch = 0;
+    }
+    message('THIRD-PERSON CAMERA');
     return;
   }
   if (e.code === 'Digit1' && e.shiftKey && !e.repeat) {

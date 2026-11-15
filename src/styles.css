@@ -796,8 +796,8 @@ summary {
   max-width: calc(100% - 32px);
   padding: 12px;
   box-sizing: border-box;
-  background: #171815ed;
-  border: 1px solid #d9b18b88;
+  background: #29221bb3;
+  border: 1px solid #e6c3a755;
   color: #eddac8;
   font: 10px/1.5 monospace;
   pointer-events: none;
