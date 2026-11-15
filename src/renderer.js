@@ -4,6 +4,7 @@ class MarsRenderer {
   constructor(canvas, parts, rocks, height) {
     this.canvas = canvas;
     this.height = height;
+    this.rockSources = rocks;
     this.gl = canvas.getContext('webgl2', {
       antialias: true,
       alpha: false,
@@ -14,7 +15,7 @@ class MarsRenderer {
     // Shared by the sky and aerial perspective so the ridge horizon has no color seam.
     const atmosphere = `vec3 dustSky(vec3 direction){
    float elevation=sqrt(clamp(direction.z,0.,1.));
-   return mix(vec3(.77,.725,.64),vec3(.735,.695,.62),elevation);
+   return mix(vec3(.76,.595,.48),vec3(.70,.565,.47),elevation);
   }`;
     const vs = `#version 300 es
   precision highp float;
@@ -22,9 +23,13 @@ class MarsRenderer {
   uniform mat4 model,viewProjection,lightProjection;uniform vec3 eye;out vec3 world,n,c;out vec4 shadowCoord;
   void main(){vec4 p=model*vec4(position,1.);world=p.xyz;n=mat3(model)*normal;c=color;shadowCoord=lightProjection*p;gl_Position=viewProjection*vec4(p.xyz-eye,1.);}`;
     const fs = `#version 300 es
-  precision highp float;in vec3 world,n,c;in vec4 shadowCoord;uniform sampler2D shadowMap,surfaceDetail;uniform vec3 eye;uniform float ground;uniform float overview;uniform vec3 terrainElevation;uniform vec4 geoOrigin;uniform vec2 geoScale;uniform vec3 contacts[4];out vec4 outColor;
+  precision highp float;in vec3 world,n,c;in vec4 shadowCoord;uniform sampler2D shadowMap,surfaceDetail;uniform vec3 eye;uniform float ground;uniform float overview;uniform vec3 terrainElevation;uniform vec4 geoOrigin;uniform vec2 geoScale;uniform vec3 contacts[4];uniform vec4 routeBounds,routeDetailBounds;out vec4 outColor;
   ${atmosphere}
-  void main(){if(ground<-.5){outColor=vec4(ground>-1.5?vec3(.46,.74,.55):ground>-2.5?vec3(1.,.82,.44):vec3(.70,.76,.81),1.);return;}vec3 normal=normalize(n);if(!gl_FrontFacing)normal=-normal;vec3 sun=normalize(vec3(-.82,-.18,.55));vec3 reliefNormal=normalize(vec3(normal.xy*mix(1.,4.,overview*step(.5,ground)),normal.z));float diffuse=max(dot(reliefNormal,sun),0.);vec3 sc=shadowCoord.xyz/shadowCoord.w*.5+.5;float shade=0.;
+  bool insideBounds(vec4 bounds){return world.x>=bounds.x+1.&&world.y>=bounds.y+1.&&world.x<=bounds.z-1.&&world.y<=bounds.w-1.;}
+  void main(){
+  if(ground>1.5&&ground<2.5&&insideBounds(routeBounds))discard;
+  if(ground>2.5&&insideBounds(routeDetailBounds))discard;
+  if(ground<-.5){outColor=vec4(ground>-1.5?vec3(.46,.74,.55):ground>-2.5?vec3(1.,.82,.44):vec3(.70,.76,.81),1.);return;}vec3 normal=normalize(n);if(!gl_FrontFacing)normal=-normal;vec3 sun=normalize(vec3(-.82,-.18,.55));vec3 reliefNormal=normalize(vec3(normal.xy*mix(1.,4.,overview*step(.5,ground)),normal.z));float diffuse=max(dot(reliefNormal,sun),0.);vec3 sc=shadowCoord.xyz/shadowCoord.w*.5+.5;float shade=0.;
   // Soft rover-only cast shadow, combined with local tire contact shading.
   if(ground>.5&&sc.x>0.&&sc.x<1.&&sc.y>0.&&sc.y<1.&&sc.z>0.&&sc.z<1.){
    float occlusion=0.;float bias=max(.0003,.001*(1.-diffuse));
@@ -40,25 +45,30 @@ class MarsRenderer {
    float weather=texture(surfaceDetail,metres.xy/14000.).r;
    float slope=1.-clamp(normal.z,0.,1.);
    float wall=smoothstep(.0015,.045,slope);
-   vec3 dust=vec3(.595,.49,.395),stone=vec3(.64,.555,.465);
+   vec3 dust=vec3(.59,.365,.265),stone=vec3(.66,.455,.345);
    albedo=mix(dust,stone,clamp(weather*.42+wall*.55,0.,1.));
    // Preserve the darker tire impressions drawn with the same terrain material.
    albedo*=clamp(c.r/.64,.55,1.12);
-   float layerPhase=metres.z*.12+weather*3.;
-   float layerFade=1.-smoothstep(.6,2.8,fwidth(layerPhase));
-   float strata=sin(layerPhase)*.045*layerFade;
-   float finePhase=metres.z*.49+weather*5.;
-   strata+=sin(finePhase)*.018*(1.-smoothstep(.6,2.8,fwidth(finePhase)));
-   float streak=texture(surfaceDetail,metres.xy*vec2(.00055,.00008)+weather*.12).g-.5;
-   albedo*=1.+(weather-.5)*.16+wall*(strata+streak*.12);
+   // Irregular dust and bedrock texture, not synthetic elevation contour stripes.
    float footprint=max(length(dFdx(metres.xy)),length(dFdy(metres.xy)));
-   vec4 grit=texture(surfaceDetail,metres.xy/8.);
-   float detailFade=1.-smoothstep(.025,.25,footprint);
-   albedo*=1.+((grit.a-.5)*.16-(1.-grit.b)*.21)*detailFade;
+   vec2 drift=texture(surfaceDetail,metres.xy/71.).rg*2.-1.;
+   vec4 grit=texture(surfaceDetail,metres.xy/5.7+drift*.12);
+   vec4 patches=texture(surfaceDetail,mat2(.8,-.6,.6,.8)*metres.xy/19.3);
+   float detailFade=1.-smoothstep(.04,.65,footprint);
+   float patchFade=1.-smoothstep(.5,4.,footprint);
+   albedo*=1.+(weather-.5)*.09+(patches.g-.5)*.16*patchFade;
+   albedo*=1.+((grit.a-.5)*.12-(1.-grit.b)*.32)*detailFade;
+   // Small-scale normal shading adds roughness without changing measured heights.
+   vec2 uv=metres.xy/5.7+drift*.12;
+   float nx=texture(surfaceDetail,uv+vec2(.0039,0.)).g-texture(surfaceDetail,uv-vec2(.0039,0.)).g;
+   float ny=texture(surfaceDetail,uv+vec2(0.,.0039)).g-texture(surfaceDetail,uv-vec2(0.,.0039)).g;
+   vec3 microNormal=normalize(normal+vec3(-nx,-ny,0.)*.8*detailFade);
+   diffuse=max(dot(microNormal,sun),0.);
+
   }
   if(ground>.5&&overview>0.){
    float elevation=world.z/terrainElevation.x+terrainElevation.y;
-   vec3 low=vec3(.48,.43,.35),middle=vec3(.73,.64,.48),high=vec3(.91,.80,.61);
+   vec3 low=vec3(.43,.255,.195),middle=vec3(.66,.385,.275),high=vec3(.81,.565,.425);
    float t=clamp((elevation-terrainElevation.y)/(terrainElevation.z-terrainElevation.y),0.,1.);
    vec3 elevationColor=t<.5?mix(low,middle,t*2.):mix(middle,high,(t-.5)*2.);
    albedo=mix(albedo,elevationColor,overview*.65);
@@ -114,6 +124,8 @@ class MarsRenderer {
       'shadowMap',
       'surfaceDetail',
       'contacts[0]',
+      'routeBounds',
+      'routeDetailBounds',
     ])
       this.uniforms[name] = gl.getUniformLocation(this.program, name);
     this.du = {
@@ -182,32 +194,55 @@ class MarsRenderer {
     }
     this.rover = this.mesh(this.smoothNormals(data));
     data = [];
+    this.rockRanges = [];
     for (const r of rocks) {
-      // Uneven, bevelled silhouettes rather than pointed pyramids.
-      let z = height(r.x, r.y),
+      const rockStart = data.length;
+      // Buried, uneven stone with bevelled shoulders and a fractured crown.
+      const z = height(r.x, r.y),
         rr = r.r,
-        lower = [],
-        upper = [],
-        burial = r.lowProfile ? rr * 0.3 : 1,
-        rockHeight = r.lowProfile ? 0.48 : 1;
-      for (let i = 0; i < 6; i++) {
-        let a = r.a + (i * Math.PI) / 3,
-          k = 0.86 + 0.12 * Math.sin(i * 9 + r.x);
-        lower.push([r.x + Math.cos(a) * rr * k, r.y + Math.sin(a) * rr * k, z - burial]);
-        upper.push([
-          r.x + Math.cos(a) * rr * k * 0.65 + rr * 0.08,
-          r.y + Math.sin(a) * rr * k * 0.65,
-          z + rr * rockHeight * (0.64 + 0.12 * Math.sin(i * 3 + r.y)),
-        ]);
+        sides = 7;
+      const rings = [[], [], []],
+        rgb = r.color || [0.4, 0.365, 0.29];
+      const tall = r.lowProfile ? 0.48 : 0.9;
+      for (let i = 0; i < sides; i++) {
+        const angle = r.a + (i * Math.PI * 2) / sides;
+        const jag = 0.84 + 0.15 * Math.sin(i * 7.3 + r.x);
+        for (let j = 0; j < 3; j++) {
+          const radial = [1, 0.88, 0.45][j] * rr * jag;
+          const px = r.x + Math.cos(angle) * radial,
+            py = r.y + Math.sin(angle) * radial;
+          const base = height(px, py);
+          rings[j].push([
+            px,
+            py,
+            j === 0
+              ? base - rr * 0.24
+              : z + rr * tall * ([0, 0.55, 0.82][j] + 0.12 * Math.sin(i * 3.7 + r.y)),
+          ]);
+        }
       }
-      for (let i = 0; i < 6; i++)
+      for (let j = 0; j < 2; j++)
+        for (let i = 0; i < sides; i++)
+          this.polygon(
+            data,
+            [
+              rings[j][i],
+              rings[j][(i + 1) % sides],
+              rings[j + 1][(i + 1) % sides],
+              rings[j + 1][i],
+            ],
+            rgb.map((c) => c * (0.94 + j * 0.06)),
+          );
+      const crown = [r.x + rr * 0.07, r.y - rr * 0.04, z + rr * tall * 0.88];
+      for (let i = 0; i < sides; i++)
         this.polygon(
           data,
-          [lower[i], lower[(i + 1) % 6], upper[(i + 1) % 6], upper[i]],
-          r.color || [0.4, 0.365, 0.29],
+          [rings[2][i], rings[2][(i + 1) % sides], crown],
+          rgb.map((c) => c * 1.08),
         );
-      this.polygon(data, upper, r.color ? r.color.map((c) => c * 1.12) : [0.48, 0.44, 0.35]);
+      this.rockRanges.push([rockStart, data.length]);
     }
+    this.rockData = new Float32Array(data);
     this.rocks = this.mesh(data);
     data = [];
     let peak = [0, 0, 15],
@@ -379,6 +414,101 @@ class MarsRenderer {
     gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
   }
 
+  restoreRocks() {
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.rocks.buffer);
+    this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, this.rockData);
+  }
+  hideRock(index) {
+    const range = this.rockRanges[index];
+    if (!range) return;
+    const data = this.rockData.slice(...range);
+    for (let i = 2; i < data.length; i += 9) data[i] -= 10000;
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.rocks.buffer);
+    this.gl.bufferSubData(this.gl.ARRAY_BUFFER, range[0] * 4, data);
+  }
+  releaseRouteMesh(mesh) {
+    if (!mesh) return;
+    this.gl.deleteBuffer(mesh.buffer);
+    this.gl.deleteVertexArray(mesh.vao);
+  }
+  updateRouteTerrain(focus, detailed = true) {
+    const route = typeof RouteTerrain !== 'undefined' && RouteTerrain.ready ? RouteTerrain : null;
+    if (!route) {
+      this.releaseRouteMesh(this.routeMesh);
+      this.releaseRouteMesh(this.routeDetailMesh);
+      this.routeMesh = this.routeDetailMesh = null;
+      this.routeBounds = this.routeDetailBounds = null;
+      this.routeVersion = undefined;
+      return;
+    }
+    const version = route.version;
+    if (this.routeVersion !== version) {
+      this.releaseRouteMesh(this.routeMesh);
+      this.releaseRouteMesh(this.routeDetailMesh);
+      this.routeDetailMesh = null;
+      this.routeDetailBounds = null;
+      this.routeVersion = version;
+      this.routeGrid = createRouteGrid(route);
+      this.routeMesh = this.mesh(buildRouteGround(this.routeGrid));
+      this.routeBounds = [
+        route.bounds.minX,
+        route.bounds.minY,
+        route.bounds.maxX,
+        route.bounds.maxY,
+      ];
+      this.routeDetailKey = '';
+    }
+    if (!detailed) {
+      this.releaseRouteMesh(this.routeDetailMesh);
+      this.routeDetailMesh = null;
+      this.routeDetailBounds = null;
+      this.routeDetailKey = '';
+      return;
+    }
+    const grid = this.routeGrid;
+    const cellsX = Math.max(
+      4,
+      Math.ceil((400 * Gale.unitsPerMeter) / grid.dx / grid.stride) * grid.stride,
+    );
+    const cellsY = Math.max(
+      4,
+      Math.ceil((400 * Gale.unitsPerMeter) / grid.dy / grid.stride) * grid.stride,
+    );
+    // Refresh only after a meaningful move; the actor remains well inside the native grid.
+    const centerX = Math.round((focus.x - grid.minX) / grid.dx / 16) * 16;
+    const centerY = Math.round((focus.y - grid.minY) / grid.dy / 16) * 16;
+    const x0 = Math.max(0, centerX - cellsX),
+      y0 = Math.max(0, centerY - cellsY);
+    const x1 = Math.min(grid.columns - 1, centerX + cellsX),
+      y1 = Math.min(grid.rows - 1, centerY + cellsY);
+    const key = [x0, y0, x1, y1].join(',');
+    if (key === this.routeDetailKey) return;
+    this.routeDetailKey = key;
+    this.releaseRouteMesh(this.routeDetailMesh);
+    this.routeDetailMesh = null;
+    this.routeDetailBounds = null;
+    if (x1 <= x0 || y1 <= y0) return;
+    this.routeDetailBounds = [
+      grid.minX + x0 * grid.dx,
+      grid.minY + y0 * grid.dy,
+      grid.minX + x1 * grid.dx,
+      grid.minY + y1 * grid.dy,
+    ];
+    this.routeDetailMesh = this.mesh(buildRouteGround(grid, { x0, y0, x1, y1 }));
+  }
+  wheelSurface(x, y) {
+    const base = this.surface(x, y);
+    let support = base;
+    for (const rock of this.rockSources) {
+      if (rock.got || rock.r < 2 || rock.r > 20) continue;
+      const radius = rock.r + this.wheels[0].radius * 0.35;
+      const d = Math.hypot(x - rock.x, y - rock.y) / radius;
+      if (d >= 1) continue;
+      const profile = (1 - d * d) ** 2;
+      support = Math.max(support, base + rock.r * (rock.lowProfile ? 0.42 : 0.78) * profile);
+    }
+    return support;
+  }
   surface(x, y) {
     return this.height(x, y);
   }
@@ -443,7 +573,7 @@ class MarsRenderer {
     let ca = Math.cos(rover.a),
       sa = Math.sin(rover.a),
       heights = this.wheels.map((w) =>
-        this.surface(
+        this.wheelSurface(
           rover.x + w.center[0] * ca - w.center[1] * sa,
           rover.y + w.center[0] * sa + w.center[1] * ca,
         ),
@@ -485,7 +615,7 @@ class MarsRenderer {
     for (let w of this.wheels) {
       let x = rover.x + right[0] * w.center[0] + back[0] * w.center[1] + up[0] * w.center[2],
         y = rover.y + right[1] * w.center[0] + back[1] * w.center[1] + up[1] * w.center[2],
-        ground = this.surface(x, y),
+        ground = this.wheelSurface(x, y),
         point = [x, y, ground],
         wheelZ = ground + w.radius * Math.sqrt(Math.max(0, 1 - right[2] * right[2]));
       if (w.previous) {
@@ -548,11 +678,21 @@ class MarsRenderer {
     this.pitch += (orbitPitch - this.pitch) * smooth;
     this.zoom += (zoom - this.zoom) * smooth;
     this.physicsDt = dt;
+    this.updateRouteTerrain(
+      this.flight ? { x: this.flight.position[0], y: this.flight.position[1] } : this.eva || rover,
+      !birdsEye &&
+        (this.flight
+          ? this.flight.position[2] -
+              this.height(this.flight.position[0], this.flight.position[1]) <
+            8000
+          : this.zoom < 8000),
+    );
     let model = this.pose(rover),
       base = model[14],
-      angle = rover.a + this.yaw,
+      subject = this.eva || rover,
+      angle = subject.a + this.yaw,
       elevation = Math.max(0.16, Math.min(1.1, 0.59 - this.pitch)),
-      target = [rover.x, rover.y, base + 25],
+      target = [subject.x, subject.y, this.eva ? this.eva.z + 55 : base + 25],
       eye;
     if (birdsEye) {
       target = [
@@ -573,6 +713,7 @@ class MarsRenderer {
               LandingReference.cameraHeightMeters * Gale.unitsPerMeter,
           ]
         : [rover.x + Math.sin(rover.a) * 15, rover.y - Math.cos(rover.a) * 15, base + 65];
+      if (this.eva) eye = [subject.x, subject.y, subject.z + 75];
       let p = this.pitch;
       target = [
         eye[0] + Math.sin(angle) * Math.cos(p) * 100,
@@ -643,7 +784,7 @@ class MarsRenderer {
     this.renderShadow(model, light);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.77, 0.725, 0.64, 1);
+    gl.clearColor(0.76, 0.595, 0.48, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     this.drawSky(eye, target, birdsEye && !freeFlight, fov);
     gl.useProgram(this.program);
@@ -675,10 +816,19 @@ class MarsRenderer {
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.surfaceDetail);
     gl.uniform1i(this.uniforms.surfaceDetail, 1);
-    this.draw(this.terrain, identity, false, 1);
+    gl.uniform4fv(this.uniforms.routeBounds, this.routeBounds || [1, 1, -1, -1]);
+    gl.uniform4fv(this.uniforms.routeDetailBounds, this.routeDetailBounds || [1, 1, -1, -1]);
+    this.draw(this.terrain, identity, false, 2);
+    if (this.routeMesh) this.draw(this.routeMesh, identity, false, 3);
+    if (this.routeDetailMesh) {
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(-1, -1);
+      this.draw(this.routeDetailMesh, identity, false, 1);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+    }
     this.draw(this.rocks, identity);
     if (this.trackMesh.count) this.draw(this.trackMesh, identity, false, 1);
-    if (!firstPerson || freeFlight) {
+    if (!firstPerson || freeFlight || this.eva) {
       this.draw(this.rover, model);
       for (let w of this.wheels) this.draw(w.mesh, w.model);
     }
@@ -706,6 +856,7 @@ class MarsRenderer {
               time * 0.0005,
             ),
           );
+    this.astronautView?.draw(this.eva, eye, vp, dt, firstPerson);
     this.fpsFrames++;
     if (time - this.fpsTime > 1000) {
       let fps = Math.round((this.fpsFrames * 1000) / (time - this.fpsTime));
@@ -859,6 +1010,119 @@ function buildMappedGround() {
       for (const i of [a, b, c, a, c, d]) {
         data.set(vertices.subarray(i * stride, (i + 1) * stride), offset);
         offset += stride;
+      }
+    }
+  return data;
+}
+// Route DEM uses its own native geographic grid rather than the crater overview grid.
+function createRouteGrid(route) {
+  const bounds = route.bounds;
+  const columns = route.columns,
+    rows = route.rows;
+  const dx = (bounds.maxX - bounds.minX) / (columns - 1);
+  const dy = (bounds.maxY - bounds.minY) / (rows - 1);
+  const stride = Math.max(1, Math.round((40 * Gale.unitsPerMeter) / Math.min(dx, dy)));
+  const xs = [],
+    ys = [];
+  for (let x = 0; x < columns - 1; x += stride) xs.push(x);
+  xs.push(columns - 1);
+  for (let y = 0; y < rows - 1; y += stride) ys.push(y);
+  ys.push(rows - 1);
+  const heights = new Float64Array(xs.length * ys.length);
+  for (let y = 0; y < ys.length; y++)
+    for (let x = 0; x < xs.length; x++) {
+      heights[y * xs.length + x] = route.height(bounds.minX + xs[x] * dx, bounds.minY + ys[y] * dy);
+    }
+  return {
+    route,
+    stride,
+    columns,
+    rows,
+    dx,
+    dy,
+    minX: bounds.minX,
+    minY: bounds.minY,
+    xs,
+    ys,
+    heights,
+  };
+}
+function coarseRouteHeight(grid, x, y) {
+  const gx = Math.max(0, Math.min(grid.columns - 1, (x - grid.minX) / grid.dx));
+  const gy = Math.max(0, Math.min(grid.rows - 1, (y - grid.minY) / grid.dy));
+  const ix = Math.min(grid.xs.length - 2, Math.floor(gx / grid.stride));
+  const iy = Math.min(grid.ys.length - 2, Math.floor(gy / grid.stride));
+  const u = (gx - grid.xs[ix]) / (grid.xs[ix + 1] - grid.xs[ix]);
+  const v = (gy - grid.ys[iy]) / (grid.ys[iy + 1] - grid.ys[iy]);
+  const i = iy * grid.xs.length + ix;
+  const a = grid.heights[i],
+    b = grid.heights[i + 1],
+    c = grid.heights[i + grid.xs.length + 1],
+    d = grid.heights[i + grid.xs.length];
+  return u >= v ? a + (b - a) * u + (c - b) * v : a + (c - d) * u + (d - a) * v;
+}
+function buildRouteGround(grid, patch = null) {
+  const xs = patch
+    ? Array.from({ length: patch.x1 - patch.x0 + 1 }, (_, i) => i + patch.x0)
+    : grid.xs;
+  const ys = patch
+    ? Array.from({ length: patch.y1 - patch.y0 + 1 }, (_, i) => i + patch.y0)
+    : grid.ys;
+  const vertices = new Float32Array(xs.length * ys.length * 9);
+  const data = new Float32Array((xs.length - 1) * (ys.length - 1) * 54);
+  const height = (x, y) => {
+    const native = grid.route.height(x, y);
+    if (!patch) return native;
+    const edge = Math.min(
+      x - (grid.minX + patch.x0 * grid.dx),
+      grid.minX + patch.x1 * grid.dx - x,
+      y - (grid.minY + patch.y0 * grid.dy),
+      grid.minY + patch.y1 * grid.dy - y,
+    );
+    const t = Math.max(0, Math.min(1, edge / (100 * Gale.unitsPerMeter)));
+    const blend = t * t * (3 - 2 * t);
+    return coarseRouteHeight(grid, x, y) * (1 - blend) + native * blend;
+  };
+  for (let iy = 0; iy < ys.length; iy++)
+    for (let ix = 0; ix < xs.length; ix++) {
+      const x = grid.minX + xs[ix] * grid.dx,
+        y = grid.minY + ys[iy] * grid.dy;
+      const h = height(x, y),
+        eps = Math.min(grid.dx, grid.dy);
+      const normalHeight = patch ? height : (px, py) => coarseRouteHeight(grid, px, py);
+      const nx = (normalHeight(x + eps, y) - normalHeight(x - eps, y)) / (2 * eps);
+      const ny = (normalHeight(x, y + eps) - normalHeight(x, y - eps)) / (2 * eps);
+      // Reveal measured concavity; do not cut synthetic craters into the DEM.
+      const ring = 15 * Gale.unitsPerMeter;
+      const bowl =
+        (grid.route.height(x + ring, y) +
+          grid.route.height(x - ring, y) +
+          grid.route.height(x, y + ring) +
+          grid.route.height(x, y - ring)) /
+          4 -
+        grid.route.height(x, y);
+      const basinShade = 1 - Math.min(0.12, (Math.max(0, bowl) / (4 * Gale.unitsPerMeter)) * 0.12);
+      vertices.set(
+        [
+          x,
+          y,
+          h,
+          ...unit([-nx, -ny, 1]),
+          ...Gale.materialAt(x, y).color.map((c) => c * basinShade),
+        ],
+        (iy * xs.length + ix) * 9,
+      );
+    }
+  let offset = 0;
+  for (let y = 0; y < ys.length - 1; y++)
+    for (let x = 0; x < xs.length - 1; x++) {
+      const a = y * xs.length + x,
+        b = a + 1,
+        c = a + xs.length + 1,
+        d = a + xs.length;
+      for (const i of [a, b, c, a, c, d]) {
+        data.set(vertices.subarray(i * 9, i * 9 + 9), offset);
+        offset += 9;
       }
     }
   return data;

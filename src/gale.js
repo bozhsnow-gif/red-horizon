@@ -160,7 +160,7 @@ const Gale = {
   materialAt(x, y) {
     return this.materials.gravel;
   },
-  elevationMeters(x, y) {
+  baseElevationMeters(x, y) {
     const m = GALE_TOPOGRAPHY,
       gx = Math.max(
         0,
@@ -185,6 +185,18 @@ const Gale = {
       c = m.heights[(iy + 1) * m.columns + ix + 1],
       d = m.heights[(iy + 1) * m.columns + ix];
     return u >= v ? a + (b - a) * u + (c - b) * v : a + (c - d) * u + (d - a) * v;
+  },
+  elevationMeters(x, y) {
+    return typeof RouteTerrain !== 'undefined' && RouteTerrain.ready
+      ? (RouteTerrain.elevation(x, y) ?? this.baseElevationMeters(x, y))
+      : this.baseElevationMeters(x, y);
+  },
+  baseHeight(x, y) {
+    return (
+      (this.baseElevationMeters(x, y) - GALE_TOPOGRAPHY.minLegend) *
+      this.unitsPerMeter *
+      this.terrainScale
+    );
   },
   height(x, y) {
     return (
@@ -266,7 +278,7 @@ const Gale = {
       ny = Math.max(this.drivingBounds.minY, Math.min(this.drivingBounds.maxY, rover.y + dy));
     for (let r of rocks)
       if (
-        r.r > 11 &&
+        r.r > (simulation ? 11 : 20) &&
         Math.hypot(nx - r.x, ny - r.y) < r.r + 19 &&
         Math.hypot(nx - r.x, ny - r.y) < Math.hypot(rover.x - r.x, rover.y - r.y)
       ) {

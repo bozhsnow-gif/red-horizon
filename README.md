@@ -33,7 +33,7 @@ Serve `dist/` with any static web server. You can also open `src/index.html` dir
 | Zoom                         | Pinch inward to zoom in, spread outward to zoom out; also + / − buttons |
 | First-person / orbit view    | Shift + 1                                                               |
 | Crater overview / orbit view | Shift + 2                                                               |
-| Leave / return to the rover  | Double-tap Space, or the free-flight button                             |
+| Leave / return to the rover  | F, or the free-flight button                                            |
 | Fly                          | WASD to move, E to rise, Q to descend                                   |
 | Recenter camera              | Double-click the view                                                   |
 | Skip intro                   | Skip Intro button or Escape                                             |
@@ -84,3 +84,15 @@ Measured MOLA cells are roughly 460 m apart. They do not resolve individual ston
 The route is a snapshot of [NASA’s published rover path](https://mars.nasa.gov/mmgis-maps/MSL/Layers/json/MSL_traverse.json), simplified to approximately 15 m and connected across short source gaps. Named stops are approximate screenshot-derived estimates matched to that path. The snapshot is not a live rover position.
 
 See [ASSETS.md](ASSETS.md) for media sources and [docs/review.md](docs/review.md) for review findings and verification limits.
+
+### Astronaut EVA
+
+Run `npm start` and open the local URL (the animated GLB loads over HTTP). Press **F** to leave the rover; use arrows or WASD to walk and turn, double-tap and hold **Up** to run, **Space** to jump, and **P** within two metres of a small rock or sample to collect it. Return within boarding range and press **F** again. **V** toggles the free-flight camera.
+
+The Blender `astronaut.glb` supplies Walk, Run, Jump and Pick Up skeletal animations. The local Three.js renderer shares the terrain WebGL depth buffer; no CDN is required. `npm run test:eva` exercises these animations in Chromium.
+
+### Measured Curiosity route terrain
+
+The game now bundles a 5 m sampling of the USGS/JPL Gale merged DEM v3 covering the stored NASA traverse plus a 500 m margin. Ridges, depressions and crater shapes come from numeric elevations, with the same terrain used for rover suspension and astronaut ground contact. Geometry is detailed near the player and simplified in the distance; a 200 m perimeter transition joins the wider crater. The wider crater now uses a bundled NASA MOLA elevation crop. Mixed source resolutions mean the crop cannot resolve every small bump. See ASSETS.md for credits and the reproducible importer.
+
+The imported laboratory is20metres south of the rover start (centre-to-centre). Press **G** to open or close its garage doors and habitat entrance using the Blender animations.

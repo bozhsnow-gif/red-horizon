@@ -135,7 +135,7 @@ test('Reset restores spawn, camera, route, samples and displayed driving mode', 
   );
 });
 
-test('Camera shortcuts, trackpad pinch and double Space preserve a parked rover', async () => {
+test('Camera shortcuts, trackpad pinch and V preserve a parked rover', async () => {
   const game = createGame();
   await begin(game);
   const before = game.evaluate('JSON.stringify(rover)');
@@ -155,10 +155,15 @@ test('Camera shortcuts, trackpad pinch and double Space preserve a parked rover'
     .element('#game')
     .emit('wheel', { ctrlKey: false, deltaY: 5, deltaX: 20, deltaMode: 0 });
   assert.notEqual(game.evaluate('orbitYaw'), 0);
-  game.setTime(2000);
   await game.windowEvent('keydown', key(game, 'Space', ' '));
-  game.setTime(2150);
-  await game.windowEvent('keydown', key(game, 'Space', ' '));
+  assert.equal(game.evaluate('freeFlight'), false);
+  await game.windowEvent('keydown', key(game, 'KeyV', 'v'));
+  assert.equal(game.evaluate('freeFlight'), true);
+  await game.windowEvent('keydown', key(game, 'KeyV', 'v', { repeat: true }));
+  assert.equal(game.evaluate('freeFlight'), true);
+  await game.windowEvent('keydown', key(game, 'KeyV', 'v'));
+  assert.equal(game.evaluate('freeFlight'), false);
+  await game.windowEvent('keydown', key(game, 'KeyV', 'v'));
   assert.equal(game.evaluate('freeFlight'), true);
   assert.equal(game.evaluate('JSON.stringify(rover)'), before);
 });
@@ -180,4 +185,65 @@ test('Only the next checkpoint counts, and flying never completes a driving chec
     'init();running=true;rover.x=Gale.climbRoute[1].x;rover.y=Gale.climbRoute[1].y;tick(1051)',
   );
   assert.equal(game.evaluate('climbIndex'), 0);
+});
+
+test('EVA is gated on model readiness, walks independently and runs only on a double tap', async () => {
+  const game = createGame();
+  await begin(game);
+  game.evaluate('graphics.astronautView.loaded=false');
+  await game.windowEvent('keydown', key(game, 'KeyF', 'f'));
+  assert.equal(game.evaluate('astronaut'), null);
+  game.evaluate('graphics.astronautView.loaded=true');
+  await game.windowEvent('keydown', key(game, 'KeyF', 'f'));
+  assert(game.evaluate('astronaut.active && !freeFlight'));
+  const parked = game.evaluate('JSON.stringify(rover)');
+  const initial = game.evaluate('astronaut.y');
+  game.setTime(1000);
+  await game.windowEvent('keydown', key(game, 'ArrowUp', 'ArrowUp'));
+  game.evaluate('stepAstronaut(.05,{forward:true})');
+  assert.equal(game.evaluate('astronaut.state'), 'Walk');
+  assert.equal(game.evaluate('astronaut.v / Gale.unitsPerMeter'), 2.8);
+  assert.notEqual(game.evaluate('astronaut.y'), initial);
+  await game.windowEvent('keyup', key(game, 'ArrowUp', 'ArrowUp'));
+  game.setTime(1200);
+  await game.windowEvent('keydown', key(game, 'ArrowUp', 'ArrowUp'));
+  game.evaluate('stepAstronaut(.05,{forward:true})');
+  assert.equal(game.evaluate('astronaut.state'), 'Run');
+  assert.equal(game.evaluate('astronaut.v / Gale.unitsPerMeter'), 6);
+  await game.windowEvent('keyup', key(game, 'ArrowUp', 'ArrowUp'));
+  assert.equal(game.evaluate('astronaut.sprinting'), false);
+  assert.equal(game.evaluate('JSON.stringify(rover)'), parked);
+  await game.windowEvent('keydown', key(game, 'KeyF', 'f'));
+  assert.equal(game.evaluate('astronaut'), null);
+});
+
+test('EVA jumps, lands, collects only in reach after animation, and reset cancels actions', async () => {
+  const game = createGame();
+  await begin(game);
+  await game.windowEvent('keydown', key(game, 'KeyF', 'f'));
+  await game.windowEvent('keydown', key(game, 'Space', ' '));
+  game.evaluate('stepAstronaut(.05,{})');
+  assert(game.evaluate('astronaut.z > evaSurface(astronaut.x,astronaut.y)'));
+  assert.equal(game.evaluate('astronaut.state'), 'Jump');
+  game.evaluate('for(let i=0;i<80;i++)stepAstronaut(.05,{})');
+  assert.equal(game.evaluate('astronaut.airborne'), false);
+  game.evaluate('samples.forEach(s=>{s.x=0;s.y=0}); rocks=[];pickupNearby()');
+  assert.equal(game.evaluate('astronaut.pickup'), null);
+  game.evaluate('samples[0].x=astronaut.x;samples[0].y=astronaut.y;pickupNearby()');
+  assert.equal(game.evaluate('astronaut.state'), 'Pick Up');
+  assert.equal(game.evaluate('collected'), 0);
+  game.evaluate('for(let i=0;i<21;i++)stepAstronaut(.05,{})');
+  assert.equal(game.evaluate('collected'), 1);
+  game.evaluate(
+    'rocks=[{x:astronaut.x,y:astronaut.y,r:4}];pickupNearby();for(let i=0;i<21;i++)stepAstronaut(.05,{})',
+  );
+  assert.equal(game.evaluate('rockSamples'), 1);
+  assert(game.evaluate('rocks[0].got'));
+  game.evaluate('pickupNearby()');
+  assert.equal(game.evaluate('astronaut.pickup'), null);
+  game.evaluate('astronaut.x+=200;toggleAstronaut()');
+  assert(game.evaluate('astronaut.active'));
+  game.evaluate('init()');
+  assert.equal(game.evaluate('astronaut'), null);
+  assert.equal(game.evaluate('rockSamples'), 0);
 });

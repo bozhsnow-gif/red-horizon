@@ -27,3 +27,13 @@ Primary scientific references already used by the game:
 - [USGS Gazetteer: Gale](https://planetarynames.wr.usgs.gov/Feature/2071), used as the approximate center tie point for the image-derived fallback.
 
 The game starts at the first coordinate in NASA’s published rover path near Bradbury Landing. Brightness, lighting, fine texture, suspension, traction, and accelerated driving remain artistic or gameplay choices.
+
+### Curiosity route elevation crop
+
+The bundled route terrain is a 5 m sampling of [USGS Mars MSL Gale Merged DEM v3](https://astrogeology.usgs.gov/search/map/mars_msl_gale_merged_dem_1m), credited to Timothy Parker and Fred J. Calef III (2016), NASA/JPL-Caltech/MSL Science Team, USGS, and the instrument teams. [Source GeoTIFF](https://planetarymaps.usgs.gov/mosaic/Mars/MSL/MSL_Gale_DEM_Mosaic_1m_v3.tif). It combines HiRISE, CTX, HRSC and MOLA; grid spacing does not imply uniform measurement accuracy. Numeric elevation samples are georeferenced using the source Mars equirectangular projection. No heights are inferred from image brightness.
+
+The crop includes the bundled NASA route plus a 500 m buffer; its outer 200 m blends into the coarse crater for continuity. Nearby geometry uses the sampled grid, while distant geometry uses lower detail. Sub-grid stones/textures are illustrative. Reproduce with `node scripts/import-route-dem.mjs`. The importer uses HTTP range requests and caches rows in artifacts; the multi-gigabyte source is not bundled.
+
+The wider crater now defaults to a bundled NASA MOLA MEGDR crop (462 by 450 native samples), replacing the image-derived backdrop. Source and SHA256 hashes are recorded in `src/mola-background.js`; reproduce using `node scripts/import-mola-background.cjs`. Surface grain and small stones remain illustrative, not individually measured rocks.
+
+`src/rocketship-laboratory.glb` is exported from the user's Blender scene `Documents/blender/rocketship__lab.blend`, preserving Blender metre scale. The separate Blender ground, stones, lights and cameras are excluded. Its horizontal centre is placed20metres south of the rover spawn. Three Blender hinge clips drive the two garage doors and habitat entrance; press G to open/close. Stationary meshes are batched; animated door hierarchies remain intact.

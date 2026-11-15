@@ -2,6 +2,8 @@
 // Only parsed numeric data is restored; never evaluate imported scripts.
 const GALE_DATA_KEY = 'red-horizon-mola-v1';
 let terrainStorageError = '';
+if (typeof MOLA_BACKGROUND_DATA !== 'undefined' && MOLA_BACKGROUND_DATA)
+  GALE_TOPOGRAPHY = GaleDEM.validateGrid(MOLA_BACKGROUND_DATA);
 try {
   const saved = localStorage.getItem(GALE_DATA_KEY);
   if (saved) GALE_TOPOGRAPHY = GaleDEM.validateGrid(JSON.parse(saved));

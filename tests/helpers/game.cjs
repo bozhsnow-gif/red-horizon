@@ -6,7 +6,13 @@ const vm = require('node:vm');
 const sourceRoot = path.resolve(__dirname, '../../src');
 const html = fs.readFileSync(path.join(sourceRoot, 'index.html'), 'utf8');
 
-function createGame({ measuredData, renderer = false, storageError } = {}) {
+function createGame({
+  measuredData,
+  renderer = false,
+  routeTerrain = false,
+  molaBackground = false,
+  storageError,
+} = {}) {
   const elements = new Map(),
     windowEvents = new Map(),
     documentEvents = new Map();
@@ -204,14 +210,23 @@ function createGame({ measuredData, renderer = false, storageError } = {}) {
   };
   vm.createContext(sandbox);
   for (const script of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+    if (/type="module"/.test(script[1])) continue;
     const src = script[1].match(/src="([^"]+)"/)?.[1];
-    let code = src ? fs.readFileSync(path.join(sourceRoot, src), 'utf8') : script[2];
+    let code =
+      src === 'route-dem-data.js' && !routeTerrain
+        ? 'const ROUTE_DEM_DATA=null;'
+        : src
+          ? fs.readFileSync(path.join(sourceRoot, src), 'utf8')
+          : script[2];
+    if (!molaBackground && src === 'mola-background.js') code = 'const MOLA_BACKGROUND_DATA=null;';
     if (!renderer && src === 'ares4-mesh.js') code = 'const ARES4_MESH=[];';
+    if (src === 'astronaut-mesh.js') code = 'const ASTRONAUT_MESH=[];';
     if (!renderer && src === 'renderer.js')
       code =
         'class MarsRenderer { constructor(){this.frames=0;this.wheels=[];this.yaw=0;this.pitch=0;this.zoom=185} resize(){} resetPose(){} resetMotion(){} render(){this.frames++} surface(x,y){return Gale.height(x,y)} }';
     vm.runInContext(code, sandbox, { filename: src || 'index.html' });
   }
+  vm.runInContext('graphics.astronautView = { loaded: true, draw() {} };', sandbox);
   return {
     sandbox,
     element,

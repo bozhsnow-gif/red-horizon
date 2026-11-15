@@ -11,7 +11,6 @@ let graphics = null,
   firstPerson = false,
   birdsEye = false,
   freeFlight = false,
-  lastSpaceTap = -Infinity,
   orbitYaw = 0,
   orbitPitch = 0,
   orbitZoom = 185,
@@ -19,6 +18,9 @@ let graphics = null,
   simulationMode = false,
   climbIndex = 0;
 let rover, samples, rocks, dist, elapsed, collected;
+let astronaut = null;
+let lastForwardTap = -Infinity;
+let rockSamples = 0;
 let pendingMissionAction = null;
 const missionIntro = new MissionIntro({
   onStart() {
@@ -55,7 +57,8 @@ function startMission(action = null) {
 }
 function clearInput() {
   keys = {};
-  lastSpaceTap = -Infinity;
+  lastForwardTap = -Infinity;
+  if (astronaut) astronaut.sprinting = false;
   lookDrag = null;
   touchPoints.clear();
   touchCenter = null;
@@ -63,6 +66,7 @@ function clearInput() {
   if (graphics?.flight) graphics.flight.velocity = [0, 0, 0];
 }
 function resetCamera() {
+  astronaut = null;
   firstPerson = false;
   birdsEye = false;
   freeFlight = false;
@@ -70,6 +74,7 @@ function resetCamera() {
   orbitPitch = 0;
   orbitZoom = 185;
   if (graphics) {
+    graphics.eva = null;
     graphics.flight = null;
     graphics.referenceCamera = false;
     graphics.yaw = 0;
@@ -102,6 +107,7 @@ function init() {
   uiTimer = 0;
   last = performance.now();
   if (graphics) graphics.resetMotion();
+  graphics?.astronautView?.laboratory?.reset();
   let landing = Gale.mapPoint(...Gale.locations.landing),
     spawn = Gale.spawnPoint;
   rover = { x: spawn.x, y: spawn.y, a: Math.PI, v: 0 };
@@ -122,9 +128,12 @@ function init() {
     };
   });
   rocks.push(...LandingReference.rocks(spawn));
+  if (graphics) graphics.rockSources = rocks;
   dist = 0;
   elapsed = 0;
   collected = 0;
+  rockSamples = 0;
+  graphics?.restoreRocks?.();
   document.querySelector('#science-title').textContent = 'Explore five geology stops';
   document.querySelector('#science-text').textContent =
     'Visit the glowing sample signals to read the Curiosity field notes.';
@@ -242,6 +251,7 @@ function message(s) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
 }
 function updateUI() {
+  const actor = astronaut || rover;
   document.querySelector('#drive-mode').textContent = simulationMode ? 'SIMULATION' : 'EXPLORATION';
   document.querySelector('#drive-mode').setAttribute('aria-pressed', String(simulationMode));
   document.querySelector('#mode-note').textContent = simulationMode
@@ -250,26 +260,31 @@ function updateUI() {
   let coordinatePoint =
     freeFlight && graphics?.flight
       ? { x: graphics.flight.position[0], y: graphics.flight.position[1] }
-      : rover;
+      : actor;
   let geo = Gale.coordinates(coordinatePoint.x, coordinatePoint.y);
   document.querySelector('#coordinate-owner').textContent =
-    (freeFlight ? 'CAMERA' : 'ROVER') + (Gale.measured ? ' · MOLA COORDS' : ' · APPROX. COORDS');
+    (freeFlight ? 'CAMERA' : astronaut ? 'ASTRONAUT' : 'ROVER') +
+    (Gale.measured ? ' · MOLA COORDS' : ' · APPROX. COORDS');
   document.querySelector('#geo-latitude').textContent = Gale.formatLatitude(geo.latitude);
   document.querySelector('#geo-longitude').textContent = Gale.formatLongitude(geo.longitude);
   WaypointRoute.update(Gale, rover, climbIndex);
   document.querySelector('#climb-elevation').textContent =
-    Math.round(Gale.elevationMeters(rover.x, rover.y)) +
-    (Gale.measured ? ' m · MOLA areoid' : ' m · estimated map elevation');
+    Math.round(Gale.elevationMeters(actor.x, actor.y)) +
+    (typeof RouteTerrain !== 'undefined' && RouteTerrain.contains(actor.x, actor.y)
+      ? ' m - USGS DEM'
+      : Gale.measured
+        ? ' m - MOLA areoid'
+        : ' m - estimated map elevation');
   document.querySelector('#count').textContent = String(collected).padStart(2, '0') + ' / 05';
   document.querySelector('#progress').style.width = collected * 20 + '%';
   document.querySelector('#missionstatus').textContent =
     collected === 5 ? 'SURVEY COMPLETE' : 'SURVEY IN PROGRESS';
-  document.querySelector('#speed').textContent = (Math.abs(rover.v) / Gale.unitsPerMeter).toFixed(
+  document.querySelector('#speed').textContent = (Math.abs(actor.v) / Gale.unitsPerMeter).toFixed(
     simulationMode ? 3 : 1,
   );
   document.querySelector('#distance').textContent = (dist / Gale.unitsPerMeter).toFixed(1);
   document.querySelector('#heading').textContent = String(
-    Math.round(((((rover.a * 180) / Math.PI) % 360) + 360) % 360) % 360,
+    Math.round(((((actor.a * 180) / Math.PI) % 360) + 360) % 360) % 360,
   ).padStart(3, '0');
   document.querySelector('#surface').textContent = Gale.materialAt(rover.x, rover.y).name;
   document.querySelector('#traction').textContent =
@@ -284,6 +299,7 @@ function terrain(x, y) {
   return Gale.height(x, y);
 }
 function render() {
+  if (graphics) graphics.eva = astronaut;
   if (graphics)
     graphics.render(
       rover,
@@ -300,7 +316,7 @@ function render() {
     );
 }
 function drawMap() {
-  WaypointRoute.draw(mx, Gale, rover, climbIndex);
+  WaypointRoute.draw(mx, Gale, astronaut || rover, climbIndex);
 }
 WaypointRoute.onTilesChanged = () => {
   if (rover) drawMap();
@@ -321,17 +337,24 @@ function tick(t) {
       left = keys.ArrowLeft || keys.a || keys.A,
       right = keys.ArrowRight || keys.d || keys.D;
     let beforeDrive = { x: rover.x, y: rover.y };
-    if (!freeFlight)
+    if (astronaut && !freeFlight)
+      stepAstronaut(dt, {
+        forward,
+        back,
+        turnLeft: left,
+        turnRight: right,
+      });
+    if (!freeFlight && !astronaut)
       dist += Gale.step(
         rover,
         { forward, back, left, right },
         dt,
         (x, y) => (graphics ? graphics.surface(x, y) : terrain(x, y)),
         simulationMode,
-        rocks,
+        rocks.filter((rock) => !rock.got),
       );
     for (const s of samples)
-      if (!freeFlight && !s.got && Math.hypot(s.x - rover.x, s.y - rover.y) < 35) {
+      if (!freeFlight && !astronaut && !s.got && Math.hypot(s.x - rover.x, s.y - rover.y) < 35) {
         s.got = true;
         collected++;
         document.querySelector('#science-title').textContent = s.name;
@@ -342,7 +365,7 @@ function tick(t) {
             : 'SAMPLE ' + String(collected).padStart(2, '0') + ' COLLECTED',
         );
       }
-    if (!freeFlight) {
+    if (!freeFlight && !astronaut) {
       let reached = WaypointRoute.advance(
         Gale.climbRoute,
         climbIndex,
@@ -375,13 +398,157 @@ function tick(t) {
 function limitLookPitch(p) {
   return Math.max(freeFlight ? -1.45 : -0.55, Math.min(freeFlight ? 1.45 : 0.4, p));
 }
+function evaSurface(x, y) {
+  return graphics ? graphics.surface(x, y) : terrain(x, y);
+}
+function toggleAstronaut() {
+  if (!running || missionIntro.active) return;
+  if (astronaut) {
+    if (astronaut.pickup || astronaut.airborne) return;
+    if (Math.hypot(astronaut.x - rover.x, astronaut.y - rover.y) > 100) {
+      message('MOVE CLOSER TO THE ROVER TO BOARD');
+      return;
+    }
+    astronaut = null;
+    message('RETURNED TO ROVER');
+  } else {
+    if (!graphics?.astronautView?.loaded) {
+      message(
+        graphics?.astronautView?.error
+          ? 'ASTRONAUT COULD NOT LOAD · RELOAD TO RETRY'
+          : 'ASTRONAUT LOADING · TRY F AGAIN IN A MOMENT',
+      );
+      return;
+    }
+    const x = rover.x + Math.cos(rover.a) * 65;
+    const y = rover.y + Math.sin(rover.a) * 65;
+    astronaut = {
+      active: true,
+      x,
+      y,
+      z: evaSurface(x, y),
+      a: rover.a,
+      v: 0,
+      vz: 0,
+      airborne: false,
+      sprinting: false,
+      state: 'Idle',
+      pickup: null,
+    };
+    message('EVA: ARROWS / WASD WALK · DOUBLE-TAP UP RUN · SPACE JUMP · P COLLECT · F BOARD');
+  }
+  rover.v = 0;
+  freeFlight = false;
+  firstPerson = false;
+  birdsEye = false;
+  orbitYaw = 0;
+  orbitPitch = 0;
+  orbitZoom = astronaut ? 130 : 185;
+  clearInput();
+  if (graphics) {
+    graphics.flight = null;
+    graphics.referenceCamera = false;
+    graphics.eva = astronaut;
+  }
+  document.querySelector('#flight-toggle').textContent = astronaut
+    ? 'RETURN TO ROVER [F]'
+    : 'LEAVE ROVER [F]';
+  updateUI();
+  focusGame();
+}
+function pickupNearby() {
+  if (!astronaut || freeFlight || astronaut.airborne || astronaut.pickup) return;
+  const reach = 2 * Gale.unitsPerMeter;
+  const candidates = [
+    ...samples.filter((s) => !s.got).map((item) => ({ item, kind: 'sample' })),
+    ...rocks
+      .map((item, index) => ({ item, index, kind: 'rock' }))
+      .filter(({ item }) => !item.got && item.r <= 12),
+  ]
+    .map((candidate) => ({
+      ...candidate,
+      distance: Math.hypot(candidate.item.x - astronaut.x, candidate.item.y - astronaut.y),
+    }))
+    .filter((candidate) => candidate.distance <= reach)
+    .sort((a, b) => a.distance - b.distance);
+  const target = candidates[0];
+  if (!target) {
+    message('MOVE WITHIN 2 METRES OF A SAMPLE OR SMALL ROCK');
+    return;
+  }
+  astronaut.a = Math.atan2(target.item.x - astronaut.x, -(target.item.y - astronaut.y));
+  astronaut.pickup = { ...target, remaining: 1 };
+  astronaut.state = 'Pick Up';
+  astronaut.v = 0;
+}
+function stepAstronaut(dt, input) {
+  const actor = astronaut;
+  if (actor.pickup) {
+    actor.pickup.remaining -= dt;
+    actor.state = 'Pick Up';
+    actor.v = 0;
+    if (actor.pickup.remaining <= 0) {
+      const { item, kind, index } = actor.pickup;
+      if (!item.got) {
+        item.got = true;
+        if (kind === 'sample') {
+          collected++;
+          document.querySelector('#science-title').textContent = item.name;
+          document.querySelector('#science-text').textContent = item.text;
+          message('GEOLOGY SAMPLE COLLECTED');
+        } else {
+          rockSamples++;
+          graphics?.hideRock?.(index);
+          document.querySelector('#science-title').textContent = 'Rock samples: ' + rockSamples;
+          document.querySelector('#science-text').textContent =
+            'Collected nearby loose rock samples during EVA.';
+          message('ROCK COLLECTED · INVENTORY: ' + rockSamples);
+        }
+      }
+      actor.pickup = null;
+      actor.state = 'Idle';
+    }
+    return;
+  }
+  actor.a += ((input.turnRight ? 1 : 0) - (input.turnLeft ? 1 : 0)) * dt * 1.8;
+  const direction = (input.forward ? 1 : 0) - (input.back ? 1 : 0);
+  const sideways = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  const magnitude = Math.hypot(direction, sideways);
+  actor.v = magnitude ? (actor.sprinting && direction > 0 ? 6 : 2.8) * Gale.unitsPerMeter : 0;
+  const stride = (actor.v * dt) / (magnitude || 1);
+  const dx = (Math.sin(actor.a) * direction + Math.cos(actor.a) * sideways) * stride;
+  const dy = (-Math.cos(actor.a) * direction + Math.sin(actor.a) * sideways) * stride;
+  actor.x = Math.max(0, Math.min(Gale.widthUnits, actor.x + dx));
+  actor.y = Math.max(0, Math.min(Gale.heightUnits, actor.y + dy));
+  dist += Math.hypot(dx, dy);
+  const floor = evaSurface(actor.x, actor.y);
+  if (actor.airborne) {
+    actor.vz -= 3.71 * Gale.unitsPerMeter * dt;
+    actor.z += actor.vz * dt;
+    if (actor.z <= floor) {
+      actor.z = floor;
+      actor.vz = 0;
+      actor.airborne = false;
+    }
+  } else actor.z = floor;
+  actor.state = actor.airborne
+    ? 'Jump'
+    : magnitude
+      ? actor.sprinting && direction > 0
+        ? 'Run'
+        : 'Walk'
+      : 'Idle';
+}
 function toggleFlight() {
   if (!running || missionIntro.active) return;
   if (graphics) graphics.referenceCamera = false;
   freeFlight = !freeFlight;
   rover.v = 0;
-  keys = {};
-  lastSpaceTap = -Infinity;
+  clearInput();
+  if (astronaut) {
+    astronaut.v = 0;
+    if (!astronaut.airborne && !astronaut.pickup) astronaut.state = 'Idle';
+  }
   firstPerson = false;
   birdsEye = false;
   orbitZoom = 185;
@@ -389,14 +556,20 @@ function toggleFlight() {
     orbitPitch = limitLookPitch(orbitPitch);
     if (graphics) graphics.flight = null;
   }
-  document.querySelector('#flight-toggle').textContent = freeFlight
-    ? 'RETURN TO ROVER'
-    : 'LEAVE ROVER';
-  message(freeFlight ? 'FREE FLIGHT · WASD MOVE · E UP / Q DOWN' : 'RETURNED TO ROVER');
+  document.querySelector('#flight-toggle').textContent = astronaut
+    ? 'RETURN TO ROVER [F]'
+    : 'LEAVE ROVER [F]';
+  message(
+    freeFlight
+      ? 'FREE FLIGHT · WASD MOVE · E UP / Q DOWN · V EXIT'
+      : astronaut
+        ? 'RETURNED TO ASTRONAUT'
+        : 'RETURNED TO ROVER',
+  );
   updateUI();
   focusGame();
 }
-document.querySelector('#flight-toggle').onclick = toggleFlight;
+document.querySelector('#flight-toggle').onclick = toggleAstronaut;
 function zoomCamera(factor) {
   orbitZoom = Math.max(115, Math.min(birdsEye ? Gale.overviewZoom * 1.5 : 420, orbitZoom * factor));
 }
@@ -566,12 +739,34 @@ window.addEventListener('keydown', (e) => {
     isInteractiveTarget(e.target)
   )
     return;
-  if (e.code === 'Space') {
+  if (e.code === 'KeyG' && !e.repeat) {
     e.preventDefault();
-    if (!e.repeat) {
-      const now = performance.now();
-      if (now - lastSpaceTap <= 350) toggleFlight();
-      else lastSpaceTap = now;
+    const lab = graphics?.astronautView?.laboratory;
+    if (!lab?.loaded) message('LABORATORY LOADING');
+    else message(lab.toggle() ? 'LABORATORY DOORS OPENING' : 'LABORATORY DOORS CLOSING');
+    return;
+  }
+  if (e.code === 'KeyF' && !e.shiftKey) {
+    e.preventDefault();
+    if (!e.repeat) toggleAstronaut();
+    return;
+  }
+  if (e.code === 'KeyV' && !e.repeat) {
+    e.preventDefault();
+    toggleFlight();
+    return;
+  }
+  if (e.code === 'KeyP' && !e.repeat) {
+    e.preventDefault();
+    pickupNearby();
+    return;
+  }
+  if (e.code === 'Space' && astronaut && !freeFlight) {
+    e.preventDefault();
+    if (!e.repeat && !astronaut.airborne && !astronaut.pickup) {
+      astronaut.airborne = true;
+      astronaut.vz = 2.7 * Gale.unitsPerMeter;
+      astronaut.state = 'Jump';
     }
     return;
   }
@@ -598,6 +793,11 @@ window.addEventListener('keydown', (e) => {
   const key = movementKey(e);
   if (key) {
     e.preventDefault();
+    if (astronaut && key === 'ArrowUp' && !e.repeat && !keys[key]) {
+      const now = performance.now();
+      astronaut.sprinting = now - lastForwardTap <= 350;
+      lastForwardTap = now;
+    }
     keys[key] = true;
   }
 });
@@ -605,6 +805,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   const key = movementKey(e);
   if (key) keys[key] = false;
+  if (astronaut && key === 'ArrowUp') astronaut.sprinting = false;
 });
 document.querySelectorAll('[data-key]').forEach((b) => {
   const k = b.dataset.key;
@@ -630,6 +831,12 @@ init();
 drawMap();
 try {
   graphics = new MarsRenderer(canvas, ARES4_MESH, rocks, terrain);
+  const connectAstronaut = () => {
+    if (!graphics.astronautView && window.AstronautView)
+      graphics.astronautView = new window.AstronautView(graphics);
+  };
+  window.addEventListener('astronaut-module-ready', connectAstronaut);
+  connectAstronaut();
   resize();
   requestAnimationFrame(tick);
   document.documentElement.dataset.renderer = 'ready';

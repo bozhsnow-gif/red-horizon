@@ -15,7 +15,12 @@ const LandingReference = {
     for (let i = 0; i < 2100; i++) {
       let angle = random(i * 7 + 1) * Math.PI * 2,
         radius = 3.3 + Math.sqrt(random(i * 7 + 2)) * (i < 1400 ? 25 : 95),
-        size = 0.008 + Math.pow(random(i * 7 + 3), 3) * 0.14;
+        size =
+          i < 1400
+            ? 0.008 + Math.pow(random(i * 7 + 3), 3) * 0.14
+            : i < 1900
+              ? 0.06 + random(i * 7 + 3) * 0.2
+              : 0.18 + random(i * 7 + 3) * 0.44;
       let tone = random(i * 7 + 4),
         color = [0.3 + tone * 0.12, 0.285 + tone * 0.105, 0.265 + tone * 0.08];
       out.push({
@@ -23,7 +28,7 @@ const LandingReference = {
         y: center.y + Math.sin(angle) * radius * 18,
         r: size * 18,
         a: random(i * 7 + 5) * Math.PI * 2,
-        lowProfile: true,
+        lowProfile: i < 1900,
         color,
         illustrative: true,
       });

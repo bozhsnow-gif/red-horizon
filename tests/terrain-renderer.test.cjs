@@ -68,7 +68,7 @@ test('Terrain, coordinates, wheel contact and GPU motion agree', async (t) => {
       );
       assert(
         run(
-          'graphics.wheels.every(w=>Math.abs(graphics.surface(w.model[12],w.model[13])+w.radius*Math.sqrt(Math.max(0,1-w.model[2]**2))-w.model[14])<.2)',
+          'graphics.wheels.every(w=>Math.abs(graphics.wheelSurface(w.model[12],w.model[13])+w.radius*Math.sqrt(Math.max(0,1-w.model[2]**2))-w.model[14])<.2)',
         ),
       );
     }
@@ -113,13 +113,32 @@ test('Terrain, coordinates, wheel contact and GPU motion agree', async (t) => {
       assert(game.draws.length > after);
     },
   );
+  await t.test('Small rocks support the wheels without blocking exploration', () => {
+    run(
+      'globalThis.savedRocks=graphics.rockSources;graphics.rockSources=[{x:rover.x,y:rover.y,r:15}]',
+    );
+    assert(run('graphics.wheelSurface(rover.x,rover.y)>graphics.surface(rover.x,rover.y)+10'));
+    assert.equal(
+      run('graphics.wheelSurface(rover.x+100,rover.y)'),
+      run('graphics.surface(rover.x+100,rover.y)'),
+    );
+    run('graphics.rockSources[0].got=true');
+    assert.equal(
+      run('graphics.wheelSurface(rover.x,rover.y)'),
+      run('graphics.surface(rover.x,rover.y)'),
+    );
+    run(
+      'graphics.rockSources=savedRocks;globalThis.rollProbe={...rover,a:0,v:50};Gale.step(rollProbe,{forward:true},.05,()=>0,false,[{x:rover.x,y:rover.y-30,r:15}])',
+    );
+    assert(run('rollProbe.y<rover.y && rollProbe.v>0'));
+  });
   await t.test('Simulation speed stays within 0.04 m/s and collisions stop the rover', () => {
     run(
       'globalThis.physicsProbe={...rover,a:0,v:0};for(let i=0;i<600;i++)Gale.step(physicsProbe,{forward:true},1/60,()=>0,true,[])',
     );
     assert(run('Math.abs(physicsProbe.v)/Gale.unitsPerMeter') <= 0.04);
     run(
-      'globalThis.collisionProbe={...rover,a:0,v:50};Gale.step(collisionProbe,{forward:true},.05,()=>0,false,[{x:rover.x,y:rover.y-30,r:15}])',
+      'globalThis.collisionProbe={...rover,a:0,v:50};Gale.step(collisionProbe,{forward:true},.05,()=>0,false,[{x:rover.x,y:rover.y-30,r:25}])',
     );
     assert.equal(run('collisionProbe.v'), 0);
   });
